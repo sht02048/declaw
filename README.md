@@ -4,7 +4,7 @@ See which Claude Code plugins and skills you actually use, so you can remove the
 
 declaw reads Claude Code's local files and reports Usage Stats for each Installation in User Scope: how many Uses it had in the period your transcripts cover, and when it was last used. It never changes anything while reporting.
 
-Status: early development. Plugins and Standalone Skills are reported.
+Status: early development. Plugins and Standalone Skills are reported, and a Cleanup can be reviewed but not yet performed.
 
 A Use is a Skill tool call, a slash command you typed that names a known skill or command, an Agent or Task call to a Plugin's subagent type, or a call to one of a Plugin's MCP tools. Uses inside subagents count. Hook runs never count, and built-in commands and subagent types are left out.
 
@@ -13,9 +13,21 @@ A Use is a Skill tool call, a slash command you typed that names a known skill o
 Requires Node 22 or later on macOS or Linux.
 
 ```sh
+npx declaw                # choose Installations to clean up, interactively
+npx declaw --dry-run      # the same, ending at the confirmation screen
 npx declaw stats          # print Usage Stats as a table
 npx declaw stats --json   # print the same Report as JSON
 ```
+
+`declaw` lists every Installation with its Usage Stats under the covered period. Move with the arrow keys, select with space, press `r` to select the recommended set, and press right or left to expand or collapse a Plugin's per-Component Uses. Synced Skills are listed but cannot be selected. Enter opens a confirmation screen that shows, for each selection, what will happen and how to undo it:
+
+| Installation | What happens | Undo |
+|---|---|---|
+| Plugin | `claude plugin uninstall <plugin> --scope user` | `claude plugin install <plugin> --scope user` |
+| Linked Skill | the link is removed; its target is kept | recreate the link with `ln -s` |
+| Standalone Skill | its folder moves to the system trash | restore it from the trash |
+
+Esc goes back to the list without changing anything, and q quits. With `--dry-run` the confirmation screen is the end. Nothing is removed yet in either mode, and there is no flag that skips the confirmation screen.
 
 declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set, otherwise from `~/.claude`, the same place Claude Code reads.
 
@@ -36,7 +48,7 @@ npm run build        # compile to dist/ with tsc
 node dist/cli.js stats   # run the built CLI
 ```
 
-Tests go through the engine's `report` operation and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. Never point tests at a real `~/.claude`.
+Tests go through the engine's `report` and `planCleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. Never point tests at a real `~/.claude`. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
 
 Domain terms are defined in [GLOSSARY.md](GLOSSARY.md), and design decisions are recorded in [docs/adr](docs/adr).
 
