@@ -17,12 +17,13 @@ export function formatStatsText(report: Report): string {
       : `Usage Stats from ${formatDate(start)} to ${formatDate(end)}`;
 
   const rows = [
-    ["KIND", "NAME", "USES", "LAST USE"],
+    ["KIND", "NAME", "USES", "LAST USE", "HOOKS"],
     ...report.installations.map((installation) => [
       KIND_LABELS[installation.kind],
       installation.name,
       String(installation.uses),
       installation.lastUse === null ? "never" : formatDate(installation.lastUse),
+      installation.kind === "plugin" ? String(installation.hooks) : "",
     ]),
   ];
   const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
