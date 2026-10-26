@@ -101,4 +101,37 @@ describe("declaw stats", () => {
       /Standalone Skill\s+ux-writing\s+0\s+never$/,
     );
   });
+
+  it("shows each status and marks the recommended Installations", async () => {
+    const config = await exampleConfig();
+    await config.plugin("switched-off@market", { skills: ["work"] });
+    await config.enabledPlugins({ "switched-off@market": false });
+    await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
+
+    const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
+
+    const lines = stdout.split("\n");
+    const row = (name: string) => lines.find((line) => line.includes(name));
+    expect(row("ux-writing")).toMatch(/^\*\s+Unused\s+Standalone Skill\s+ux-writing\s/);
+    expect(row("switched-off@market")).toMatch(/^\*\s+Unused\s+Plugin\s+switched-off@market\s.*disabled$/);
+    expect(row("linear-ticket")).toMatch(/^\s+Used\s+Standalone Skill\s+linear-ticket\s/);
+    expect(row("fresh-skill")).toMatch(/^\s+Too New\s+Standalone Skill\s+fresh-skill\s/);
+    expect(stdout).toContain("* recommended for Cleanup");
+  });
+
+  it("carries each Installation's status and recommended flag in --json", async () => {
+    const config = await exampleConfig();
+    await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
+
+    const { stdout } = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
+
+    const flags = JSON.parse(stdout).installations.map(
+      (i: { name: string; status: string; recommended: boolean }) => [i.name, i.status, i.recommended],
+    );
+    expect(flags).toEqual([
+      ["ux-writing", "unused", true],
+      ["fresh-skill", "too-new", false],
+      ["linear-ticket", "used", false],
+    ]);
+  });
 });
