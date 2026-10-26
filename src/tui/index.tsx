@@ -17,6 +17,7 @@ export async function runInteractive({ report, configDir, dryRun }: InteractiveS
     <App
       report={report}
       configDir={configDir}
+      now={new Date()}
       dryRun={dryRun}
       cleanup={(selection) => cleanup(selection, { configDir, trash: systemTrash, runClaude })}
     />,

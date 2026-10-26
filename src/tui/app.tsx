@@ -1,34 +1,33 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, type ReactNode } from "react";
 import wrapAnsi from "wrap-ansi";
 import {
   isRemovable,
   planCleanup,
   type CleanupOutcome,
-  type Component,
   type Installation,
   type PlannedAction,
   type Report,
 } from "../engine/index.js";
 import { actionText } from "../cli/actions.js";
-import {
-  alignRow,
-  columnWidths,
-  formatHookCount,
-  formatHooksPerSession,
-  formatLastUse,
-  formatPeriod,
-  formatSources,
-  installNote,
-  kindLabel,
-  USAGE_STATUS_LABELS,
-} from "../cli/format.js";
+import { formatSources } from "../cli/format.js";
 import { formatCleanupSummary } from "../cli/summary.js";
 import { countOf } from "../plural.js";
+import {
+  columnHeader,
+  columnsFor,
+  componentLine,
+  hooksLine,
+  installationLine,
+  isChild,
+  listRowsOf,
+} from "./list.js";
+import { formatPeriodLine } from "./text.js";
 
 export interface AppProps {
   report: Report;
   configDir: string;
+  now: Date;
   dryRun: boolean;
   cleanup: (selection: Installation[]) => Promise<CleanupOutcome[]>;
 }
@@ -37,30 +36,47 @@ type Screen = "list" | "confirm" | "running" | "summary";
 
 interface Line {
   key: string;
-  text: string;
-  style?: "bold" | "dim" | "warning" | "cursor";
+  content?: ReactNode;
+  text?: string;
+  style?: "bold" | "dim" | "warning";
 }
 
-const LIST_KEYS =
-  "up/down move · space select · r recommended · right/left expand · enter review · q quit";
+type Keys = [key: string, label: string][];
+
+const LIST_KEYS: Keys = [
+  ["↑↓", "move"],
+  ["space", "select"],
+  ["r", "recommended"],
+  ["→←", "expand"],
+  ["enter", "review"],
+  ["q", "quit"],
+];
 const DRY_RUN_KEYS = "up/down scroll · esc back to the list · q quit";
 const CONFIRM_KEYS = `y run the Cleanup · ${DRY_RUN_KEYS}`;
 const SUMMARY_KEYS = "up/down scroll · q quit";
 
-export function App({ report, configDir, dryRun, cleanup }: AppProps) {
+export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const { installations } = report;
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
   const [state, dispatch] = useReducer(reducerFor(installations, dryRun), INITIAL_STATE);
-  const { screen, cursor, pageTop, selection, expanded } = state;
+  const { screen, pageTop, selection } = state;
   const listTop = useRef(0);
 
   const selected = installations.filter((installation) => selection.has(installation.name));
 
   const header: Line[] = [
-    { key: "period", text: formatPeriod(report.period), style: "bold" },
+    {
+      key: "title",
+      content: (
+        <>
+          <Text bold>declaw</Text>
+          <Text dimColor>{`  ${formatPeriodLine(report.period)}`}</Text>
+        </>
+      ),
+    },
     ...formatSources(report.sources, { problemsOnly: true }).map(
-      (text): Line => ({ key: text, text, style: "warning" }),
+      (text): Line => ({ key: text, content: text, style: "warning" }),
     ),
   ];
 
@@ -69,12 +85,19 @@ export function App({ report, configDir, dryRun, cleanup }: AppProps) {
     void cleanup(selected).then((outcomes) => dispatch({ type: "finished", outcomes }));
   }, [screen]);
 
-  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir }), dryRun);
+  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir }), {
+    dryRun,
+    now,
+    columns,
+  });
   const footer = footerOf(state, dryRun);
+  const fixed = [...header, ...body.header, ...footer];
 
   const heightOf = (line: Line) =>
-    wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
-  const room = Math.max(3, rows - 1 - [...header, ...footer].reduce((sum, line) => sum + heightOf(line), 0));
+    line.text === undefined
+      ? 1
+      : wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
+  const room = Math.max(3, rows - 1 - fixed.reduce((sum, line) => sum + heightOf(line), 0));
   const heights = body.lines.map(heightOf);
 
   let top: number;
@@ -107,26 +130,42 @@ export function App({ report, configDir, dryRun, cleanup }: AppProps) {
   });
 
   const shown: Line[] = [
-    ...(view.above > 0 ? [{ key: "above", text: `  ${view.above} more above`, style: "dim" as const }] : []),
+    ...(view.above > 0 ? [{ key: "above", content: `  ↑ ${view.above} more`, style: "dim" as const }] : []),
     ...body.lines.slice(view.start, view.end),
-    ...(view.below > 0 ? [{ key: "below", text: `  ${view.below} more below`, style: "dim" as const }] : []),
+    ...(view.below > 0 ? [{ key: "below", content: `  ↓ ${view.below} more`, style: "dim" as const }] : []),
   ];
 
   return (
     <Box flexDirection="column">
-      {[...header, ...shown, ...footer].map((line) => (
-        <Text
-          key={line.key}
-          bold={line.style === "bold"}
-          dimColor={line.style === "dim"}
-          inverse={line.style === "cursor"}
-          {...(line.style === "warning" && { color: "yellow" })}
-        >
-          {line.text === "" ? " " : line.text}
-        </Text>
-      ))}
+      {[...header, ...body.header, ...shown, ...footer].map((line) =>
+        line.text !== undefined ? (
+          <Text key={line.key} bold={line.style === "bold"} dimColor={line.style === "dim"}>
+            {line.text === "" ? " " : line.text}
+          </Text>
+        ) : (
+          <Text
+            key={line.key}
+            wrap="truncate-end"
+            bold={line.style === "bold"}
+            dimColor={line.style === "dim"}
+            {...(line.style === "warning" && { color: "yellow" })}
+          >
+            {line.content === "" || line.content === undefined ? " " : line.content}
+          </Text>
+        ),
+      )}
     </Box>
   );
+}
+
+function keyBar(keys: Keys): ReactNode {
+  return keys.map(([key, label], index) => (
+    <Text key={key}>
+      {index > 0 && "  "}
+      <Text bold>{key}</Text>
+      <Text dimColor>{` ${label}`}</Text>
+    </Text>
+  ));
 }
 
 interface State {
@@ -232,119 +271,75 @@ function withName(names: ReadonlySet<string>, name: string, present: boolean): R
 }
 
 interface Body {
+  header: Line[];
   lines: Line[];
   focus: number;
   focusEnd?: number;
 }
 
-interface ListRow {
-  index: number;
-  component?: number;
-  hooks?: true;
-}
-
-function listRowsOf(installations: Installation[], expanded: ReadonlySet<string>): ListRow[] {
-  return installations.flatMap((installation, index): ListRow[] => {
-    if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
-    const count = Math.max(1, installation.components.length);
-    return [
-      { index },
-      ...Array.from({ length: count }, (_, component) => ({ index, component })),
-      { index, hooks: true },
-    ];
-  });
-}
-
-function isChild(listRow: ListRow | undefined): boolean {
-  return listRow?.component !== undefined || listRow?.hooks === true;
+interface Layout {
+  dryRun: boolean;
+  now: Date;
+  columns: number;
 }
 
 function listLines(
   installations: Installation[],
-  cursor: number,
-  selection: ReadonlySet<string>,
-  expanded: ReadonlySet<string>,
+  { cursor, selection, expanded }: State,
+  { now, columns: width }: Layout,
 ): Body {
-  const widths = columnWidths(installations.map(installationCells));
-  const componentWidths = new Map(
-    installations.map((installation) => [
-      installation,
-      installation.kind === "plugin" ? columnWidths(installation.components.map(componentCells)) : [],
-    ]),
-  );
+  const columns = columnsFor(installations, now, width);
   const listRows = listRowsOf(installations, expanded);
   const lines = listRows.map((listRow, line): Line => {
     const installation = installations[listRow.index]!;
     const onCursor = line === cursor;
-    const marker = onCursor ? ">" : " ";
-    const style = onCursor ? { style: "cursor" as const } : { style: "dim" as const };
     if (listRow.hooks && installation.kind === "plugin") {
-      return {
-        key: `${installation.name} hooks`,
-        text: `${marker}       ${formatHooksPerSession(installation.hooks)}`,
-        ...style,
-      };
+      return { key: `${installation.name} hooks`, content: hooksLine(installation.hooks, onCursor) };
     }
     if (listRow.component !== undefined) {
       const component = installation.kind === "plugin" ? installation.components[listRow.component] : undefined;
-      const text = component
-        ? alignRow(componentCells(component), componentWidths.get(installation)!)
-        : "no Components found";
       return {
         key: `${installation.name} ${component ? `${component.kind} ${component.name}` : "none"}`,
-        text: `${marker}       ${text}`,
-        ...style,
+        content: componentLine(component, { onCursor, columns, now }),
       };
     }
-    const checkbox = !isRemovable(installation)
-      ? "   "
-      : selection.has(installation.name)
-        ? "[x]"
-        : "[ ]";
-    const recommended = installation.recommended ? "*" : " ";
     return {
       key: installation.name,
-      text: `${marker} ${checkbox} ${recommended} ${alignRow(installationCells(installation), widths)}`,
-      ...(onCursor && style),
+      content: installationLine(installation, {
+        onCursor,
+        selected: selection.has(installation.name),
+        columns,
+        now,
+      }),
     };
   });
   let focusEnd = cursor;
   if (!isChild(listRows[cursor])) {
     while (isChild(listRows[focusEnd + 1])) focusEnd += 1;
   }
-  return { lines, focus: cursor, focusEnd };
+  return {
+    header: [
+      { key: "gap", content: "" },
+      { key: "columns", content: columnHeader(columns) },
+    ],
+    lines,
+    focus: cursor,
+    focusEnd,
+  };
 }
 
-function componentCells(component: Component): string[] {
-  return [component.kind, component.name, String(component.uses), formatLastUse(component.lastUse)];
-}
-
-function installationCells(installation: Installation): string[] {
-  return [
-    USAGE_STATUS_LABELS[installation.usageStatus],
-    kindLabel(installation),
-    installation.name,
-    String(installation.uses),
-    formatLastUse(installation.lastUse),
-    installation.kind === "plugin"
-      ? [formatHookCount(installation.hooks), installNote(installation)].filter(Boolean).join(", ")
-      : installNote(installation),
-  ];
-}
-
-function bodyOf(
-  state: State,
-  installations: Installation[],
-  plan: () => PlannedAction[],
-  dryRun: boolean,
-): Body {
+function bodyOf(state: State, installations: Installation[], plan: () => PlannedAction[], layout: Layout): Body {
   switch (state.screen) {
     case "list":
-      return listLines(installations, state.cursor, state.selection, state.expanded);
+      return listLines(installations, state, layout);
     case "confirm":
-      return confirmLines(plan(), dryRun);
+      return confirmLines(plan(), layout.dryRun);
     case "running":
-      return { lines: [{ key: "running", text: `Cleaning up ${countOf(state.selection.size, "Installation")}...` }], focus: 0 };
+      return {
+        header: [],
+        lines: [{ key: "running", text: `Cleaning up ${countOf(state.selection.size, "Installation")}...` }],
+        focus: 0,
+      };
     case "summary":
       return summaryLines(state.outcomes);
   }
@@ -355,12 +350,11 @@ function footerOf(state: State, dryRun: boolean): Line[] {
   switch (state.screen) {
     case "list":
       return [
-        gap,
-        { key: "legend", text: "* recommended for Cleanup", style: "dim" },
+        { key: "footer gap", content: "" },
         ...(state.needsSelection
-          ? [{ key: "hint", text: "Select at least one Installation to review.", style: "warning" as const }]
+          ? [{ key: "hint", content: "Select at least one Installation to review.", style: "warning" as const }]
           : []),
-        { key: "keys", text: LIST_KEYS, style: "dim" },
+        { key: "keys", content: keyBar(LIST_KEYS) },
       ];
     case "confirm":
       return dryRun
@@ -382,14 +376,12 @@ function summaryLines(outcomes: CleanupOutcome[]): Body {
     .replace(/\n$/, "")
     .split("\n")
     .map((text, index): Line => ({ key: `summary ${index}`, text }));
-  return { lines, focus: 0 };
+  return { header: [], lines, focus: 0 };
 }
 
 function confirmLines(plan: PlannedAction[], dryRun: boolean): Body {
   const title = dryRun ? "Dry run of the Cleanup of" : "Review the Cleanup of";
-  const lines: Line[] = [
-    { key: "title", text: `${title} ${countOf(plan.length, "Installation")}:` },
-  ];
+  const lines: Line[] = [{ key: "title", text: `${title} ${countOf(plan.length, "Installation")}:` }];
   for (const action of plan) {
     const { describe, undo } = actionText(action);
     lines.push(
@@ -399,7 +391,7 @@ function confirmLines(plan: PlannedAction[], dryRun: boolean): Body {
       { key: `${action.name} undo`, text: `  Undo: ${undo}`, style: "dim" },
     );
   }
-  return { lines, focus: 0 };
+  return { header: [], lines, focus: 0 };
 }
 
 interface View {
