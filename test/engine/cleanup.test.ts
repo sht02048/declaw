@@ -64,4 +64,29 @@ describe("cleanup", () => {
     expect(await exists(folder)).toBe(false);
     expect(await readFile(join(trash.dir, "ux-writing", "SKILL.md"), "utf8")).toBe(before);
   });
+
+  it("reports a failed Installation and still cleans up the rest", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("stuck");
+    await config.standaloneSkill("ux-writing");
+    await config.linkedSkill("find-skills");
+    const stuck = join(config.path, "skills", "stuck");
+    const result = await report({ configDir: config.path, now });
+    const { trash, options } = effectsFor(config, { failOn: [stuck] });
+
+    const outcomes = await cleanup(named(result, "stuck", "ux-writing", "find-skills"), options);
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({
+        name: "stuck",
+        result: "failed",
+        message: `could not move ${stuck} to the trash`,
+      }),
+      expect.objectContaining({ name: "ux-writing", result: "removed" }),
+      expect.objectContaining({ name: "find-skills", result: "removed" }),
+    ]);
+    expect(await exists(stuck)).toBe(true);
+    expect(trash.moves).toEqual([join(config.path, "skills", "ux-writing")]);
+    expect(await exists(join(config.path, "skills", "find-skills"))).toBe(false);
+  });
 });
