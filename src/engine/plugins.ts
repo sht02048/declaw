@@ -14,6 +14,7 @@ export interface ComponentEntry {
 export interface PluginEntry {
   key: string;
   enabled: boolean;
+  hooks: number;
   components: ComponentEntry[];
 }
 
@@ -39,7 +40,8 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const enabled = typeof setting === "boolean" ? setting : manifest.defaultEnabled !== false;
     const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
     const components = await findComponents(record.installPath, namespace, manifest);
-    plugins.push({ key, enabled, components });
+    const hooks = await countHooks(record.installPath, manifest.hooks);
+    plugins.push({ key, enabled, hooks, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -92,8 +94,33 @@ async function markdownNamesIn(path: string): Promise<string[]> {
 }
 
 async function mcpServerKeys(root: string, declared: unknown): Promise<string[]> {
+  const configs = await mergedConfigs(root, ".mcp.json", declared, "mcpServers");
+  return configs.flatMap((servers) => Object.keys(servers));
+}
+
+async function countHooks(root: string, declared: unknown): Promise<number> {
+  const configs = await mergedConfigs(root, join("hooks", "hooks.json"), declared, "hooks");
+  let count = 0;
+  for (const events of configs) {
+    for (const groups of Object.values(events)) {
+      if (!Array.isArray(groups)) continue;
+      for (const group of groups) {
+        const hooks = asObject(group).hooks;
+        if (Array.isArray(hooks)) count += hooks.length;
+      }
+    }
+  }
+  return count;
+}
+
+async function mergedConfigs(
+  root: string,
+  defaultFile: string,
+  declared: unknown,
+  wrapperKey: string,
+): Promise<JsonObject[]> {
   const configs: JsonObject[] = [];
-  const defaultConfig = await readJson(join(root, ".mcp.json"));
+  const defaultConfig = await readJson(join(root, defaultFile));
   if (defaultConfig) configs.push(defaultConfig);
   for (const item of Array.isArray(declared) ? declared : [declared]) {
     if (typeof item === "string") {
@@ -103,8 +130,8 @@ async function mcpServerKeys(root: string, declared: unknown): Promise<string[]>
       configs.push(asObject(item));
     }
   }
-  return configs.flatMap((config) =>
-    Object.keys(config.mcpServers === undefined ? config : asObject(config.mcpServers)),
+  return configs.map((config) =>
+    config[wrapperKey] === undefined ? config : asObject(config[wrapperKey]),
   );
 }
 

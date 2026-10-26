@@ -19,6 +19,7 @@ export interface PluginFixture {
   commands?: string[];
   agents?: string[];
   mcpServers?: JsonObject;
+  hooks?: JsonObject;
   files?: Record<string, string>;
   marketplaceEntry?: JsonObject;
 }
@@ -51,6 +52,9 @@ export class FakeConfigDir {
     }
     if (fixture.mcpServers) {
       await writeJson(join(installPath, ".mcp.json"), { mcpServers: fixture.mcpServers });
+    }
+    if (fixture.hooks) {
+      await writeJson(join(installPath, "hooks", "hooks.json"), { hooks: fixture.hooks });
     }
     for (const [relativePath, content] of Object.entries(fixture.files ?? {})) {
       const file = join(installPath, relativePath);

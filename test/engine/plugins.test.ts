@@ -149,4 +149,34 @@ describe("report: Plugin Inventory", () => {
       "agent curated:curated-choice",
     ]);
   });
+
+  it("counts the hooks a Plugin runs from its hook configuration", async () => {
+    const config = await fakeConfigDir();
+    const command = (script: string) => ({
+      type: "command",
+      command: `node "\${CLAUDE_PLUGIN_ROOT}"/scripts/${script}.cjs`,
+    });
+    await config.plugin("oh-my-claudecode@omc", {
+      manifest: {
+        name: "oh-my-claudecode",
+        hooks: "./extra-hooks.json",
+      },
+      hooks: {
+        SessionStart: [{ matcher: "startup", hooks: [command("session"), command("memory")] }],
+        UserPromptSubmit: [{ hooks: [command("keywords")] }],
+      },
+      files: {
+        "extra-hooks.json": JSON.stringify({
+          hooks: { PostToolUse: [{ matcher: "Write|Edit", hooks: [command("verify")] }] },
+        }),
+      },
+    });
+    await config.plugin("quiet@market");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(
+      Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.hooks])),
+    ).toEqual({ "oh-my-claudecode@omc": 4, "quiet@market": 0 });
+  });
 });

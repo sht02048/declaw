@@ -31,6 +31,7 @@ export interface Plugin {
   kind: "plugin";
   name: string;
   enabled: boolean;
+  hooks: number;
   uses: number;
   lastUse: Date | null;
   components: Component[];
@@ -70,6 +71,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
         kind: "plugin",
         name: plugin.key,
         enabled: plugin.enabled,
+        hooks: plugin.hooks,
         uses: 0,
         lastUse: null,
         components: plugin.components.map((component) => ({ ...component, uses: 0, lastUse: null })),
