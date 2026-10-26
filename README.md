@@ -48,7 +48,7 @@ npm run build        # compile to dist/ with tsc
 node dist/cli.js stats   # run the built CLI
 ```
 
-Tests go through the engine's `report` and `planCleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. Never point tests at a real `~/.claude`. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
+Tests go through the engine's `report`, `planCleanup`, and `cleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. `cleanup` takes the `claude` CLI runner as an argument, so its tests pass a fake runner and check the calls it recorded instead of running the real `claude plugin uninstall`. Never point tests at a real `~/.claude`. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
 
 Domain terms are defined in [GLOSSARY.md](GLOSSARY.md), and design decisions are recorded in [docs/adr](docs/adr).
 
