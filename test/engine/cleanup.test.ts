@@ -48,4 +48,20 @@ describe("cleanup", () => {
     expect(trash.moves).toEqual([]);
     expect(claude.calls).toEqual([]);
   });
+
+  it("moves a real Standalone Skill's folder through the trash mover instead of deleting it", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("ux-writing");
+    const folder = join(config.path, "skills", "ux-writing");
+    const before = await readFile(join(folder, "SKILL.md"), "utf8");
+    const result = await report({ configDir: config.path, now });
+    const { trash, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "ux-writing"), options);
+
+    expect(outcomes).toEqual([expect.objectContaining({ name: "ux-writing", result: "removed" })]);
+    expect(trash.moves).toEqual([folder]);
+    expect(await exists(folder)).toBe(false);
+    expect(await readFile(join(trash.dir, "ux-writing", "SKILL.md"), "utf8")).toBe(before);
+  });
 });

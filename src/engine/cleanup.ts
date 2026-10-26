@@ -23,12 +23,15 @@ export type CleanupOutcome =
 
 export async function cleanup(
   selection: Installation[],
-  { configDir }: CleanupOptions,
+  { configDir, trash }: CleanupOptions,
 ): Promise<CleanupOutcome[]> {
   const outcomes: CleanupOutcome[] = [];
   for (const action of planCleanup(selection, { configDir })) {
     if (action.kind === "remove-link" && (await lstat(action.path)).isSymbolicLink()) {
       await unlink(action.path);
+      outcomes.push({ name: action.name, action, result: "removed" });
+    } else if (action.kind === "move-to-trash") {
+      await trash(action.path);
       outcomes.push({ name: action.name, action, result: "removed" });
     }
   }
