@@ -31,4 +31,50 @@ describe("TUI", () => {
       expect(frame).toContain(name);
     }
   });
+
+  it("selects the recommended set in one step", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, "r");
+
+    expect(selected(lastFrame()!)).toEqual(["idle@market", "ux-writing"]);
+  });
+
+  it("toggles the Installation under the cursor", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, "r", DOWN, DOWN, " ", DOWN, " ");
+
+    expect(selected(lastFrame()!)).toEqual(["idle@market", "vercel@market"]);
+  });
+
+  it("shows a Synced Skill but never selects it", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, DOWN, " ");
+
+    const row = lastFrame()!.split("\n").find((line) => line.includes("anthropic-skills:brand-voice"))!;
+    expect(row).toContain("managed by claude.ai");
+    expect(row).not.toContain("[x]");
+    expect(selected(lastFrame()!)).toEqual([]);
+  });
 });
+
+const DOWN = "\u001B[B";
+
+async function press(stdin: { write: (data: string) => void }, ...keys: string[]) {
+  for (const key of keys) {
+    stdin.write(key);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
+
+function selected(frame: string): string[] {
+  return frame
+    .split("\n")
+    .filter((line) => line.includes("[x]"))
+    .map((line) => line.match(/\S+@\S+|anthropic-skills:\S+|ux-writing/)![0]);
+}
