@@ -1,4 +1,3 @@
-import { dirname, join } from "node:path";
 import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
@@ -23,7 +22,7 @@ export type {
 
 export interface ReportOptions {
   configDir: string;
-  configFile?: string;
+  configFile: string;
   now: Date;
 }
 
@@ -86,7 +85,7 @@ const COUNTED_BY_SKILL_USAGE = new Set<ComponentKind>(["skill", "command"]);
 
 export async function report({
   configDir,
-  configFile = join(dirname(configDir), ".claude.json"),
+  configFile,
   now,
 }: ReportOptions): Promise<Report> {
   const { status: installRecords, plugins } = await findPlugins(configDir);

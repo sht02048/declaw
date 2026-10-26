@@ -18,7 +18,7 @@ async function exampleReport() {
     userPrompt("ship it", "2026-09-28T07:15:00.000Z"),
     skillToolCall("vercel:deploy", "2026-10-09T10:30:00.000Z"),
   ]);
-  return { config, result: await report({ configDir: config.path, now }) };
+  return { config, result: await report({ ...config.paths, now }) };
 }
 
 describe("TUI", () => {
@@ -37,7 +37,7 @@ describe("TUI", () => {
   it("says which data source could not be read", async () => {
     const { config } = await exampleReport();
     await config.corruptInstallRecords();
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
@@ -100,7 +100,7 @@ describe("TUI in a short terminal", () => {
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
@@ -123,7 +123,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
       skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
     ]);
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
@@ -147,7 +147,7 @@ describe("TUI in a short terminal", () => {
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
@@ -166,7 +166,7 @@ describe("TUI in a short terminal", () => {
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     let rows = 16;
     Object.defineProperty(stdout, "rows", { get: () => rows });
@@ -189,7 +189,7 @@ describe("TUI in a short terminal", () => {
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
@@ -213,7 +213,7 @@ async function cleanupReport() {
   await config.transcript({ project: "/work/app", session: "s1" }, [
     userPrompt("hello", "2026-09-28T07:15:00.000Z"),
   ]);
-  return { config, result: await report({ configDir: config.path, now }) };
+  return { config, result: await report({ ...config.paths, now }) };
 }
 
 describe("TUI confirmation screen", () => {

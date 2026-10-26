@@ -28,7 +28,7 @@ describe("report: agent Uses", () => {
       agentToolCall("oh-my-claudecode:verifier", "2026-10-09T09:00:00.000Z", { tool: "Task" }),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]).toMatchObject({
       name: "omc-tools@omc",
@@ -57,7 +57,7 @@ describe("report: agent Uses", () => {
       agentToolCall("Plan", "2026-10-05T09:02:00.000Z", { tool: "Task" }),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]).toMatchObject({ uses: 0, lastUse: null });
   });
@@ -75,7 +75,7 @@ describe("report: slash command Uses", () => {
       slashCommand("linear-ticket", "2026-10-15T06:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(
       result.installations.map(({ name, uses, lastUse }) => ({ name, uses, lastUse })),
@@ -104,7 +104,7 @@ describe("report: slash command Uses", () => {
       slashCommand("plugin", "2026-10-13T06:02:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map(({ name, uses }) => ({ name, uses }))).toEqual([
       { name: "skills@sht02048-skills", uses: 0 },
@@ -138,7 +138,7 @@ describe("report: MCP tool Uses", () => {
       mcpToolCall("mcp__context7__query-docs", "2026-10-09T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(
       plugins(result).map(({ name, uses, components }) => ({
@@ -195,7 +195,7 @@ describe("report: Uses inside subagents", () => {
       mcpToolCall("mcp__plugin_oh-my-claudecode_t__lsp_hover", "2026-10-05T09:03:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map(({ name, uses, lastUse }) => ({ name, uses, lastUse }))).toEqual([
       { name: "linear-ticket", uses: 1, lastUse: new Date("2026-10-05T09:01:00.000Z") },
@@ -235,7 +235,7 @@ describe("report: hook runs", () => {
     await config.transcript(session, hookActivity);
     await config.subagentTranscript({ ...session, agentId: "a1" }, hookActivity);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       {

@@ -36,7 +36,7 @@ describe("cleanup", () => {
     const target = join(config.home, ".agents", "skills", "find-skills");
     await config.linkedSkill("find-skills", { target });
     const before = await readFile(join(target, "SKILL.md"), "utf8");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { trash, claude, options } = effectsFor(config);
 
     const outcomes = await cleanup(named(result, "find-skills"), options);
@@ -54,7 +54,7 @@ describe("cleanup", () => {
     await config.standaloneSkill("ux-writing");
     const folder = join(config.path, "skills", "ux-writing");
     const before = await readFile(join(folder, "SKILL.md"), "utf8");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { trash, options } = effectsFor(config);
 
     const outcomes = await cleanup(named(result, "ux-writing"), options);
@@ -71,7 +71,7 @@ describe("cleanup", () => {
     await config.standaloneSkill("ux-writing");
     await config.linkedSkill("find-skills");
     const stuck = join(config.path, "skills", "stuck");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { trash, options } = effectsFor(config, { failOn: [stuck] });
 
     const outcomes = await cleanup(named(result, "stuck", "ux-writing", "find-skills"), options);
@@ -93,7 +93,7 @@ describe("cleanup", () => {
   it("leaves a Linked Skill alone when its link became a real folder since the Report", async () => {
     const config = await fakeConfigDir();
     await config.linkedSkill("find-skills");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const path = join(config.path, "skills", "find-skills");
     await rm(path);
     await config.standaloneSkill("find-skills");
@@ -111,7 +111,7 @@ describe("cleanup", () => {
   it("leaves a real Standalone Skill alone when its folder became a link since the Report", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("ux-writing");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const path = join(config.path, "skills", "ux-writing");
     await rm(path, { recursive: true });
     const target = join(config.home, "repo", "ux-writing");
@@ -135,7 +135,7 @@ describe("cleanup", () => {
     await config.standaloneSkill("ux-writing");
     await config.linkedSkill("find-skills");
     await config.syncedSkill("brand-voice");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { trash, claude, options } = effectsFor(config);
 
     const outcomes = await cleanup(named(result, "ux-writing", "anthropic-skills:brand-voice"), options);
@@ -145,7 +145,7 @@ describe("cleanup", () => {
     expect(claude.calls).toEqual([]);
     expect((await readdir(join(config.path, "skills"))).sort()).toEqual(["find-skills", "keep-me", "synced"]);
     expect(await readdir(join(config.path, "skills", "synced", "org_account"))).toContain("brand-voice");
-    const after = await report({ configDir: config.path, now });
+    const after = await report({ ...config.paths, now });
     expect(after.installations.map((installation) => installation.name).sort()).toEqual([
       "anthropic-skills:brand-voice",
       "find-skills",
@@ -163,7 +163,7 @@ async function twoPlugins() {
   const config = await fakeConfigDir();
   await config.plugin("vercel@claude-plugins-official", { skills: ["deploy"] });
   await config.plugin("idle@market", { skills: ["nap"] });
-  return { config, result: await report({ configDir: config.path, now }) };
+  return { config, result: await report({ ...config.paths, now }) };
 }
 
 describe("cleanup of Plugins", () => {
@@ -239,7 +239,7 @@ describe("cleanup of Plugins", () => {
   it("calls claude only for Plugins in the selection", async () => {
     const { config } = await twoPlugins();
     await config.standaloneSkill("ux-writing");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const { calls, run: claude } = fakeClaude();
 
     await cleanup(named(result, "ux-writing", "idle@market"), withClaude(config, claude));

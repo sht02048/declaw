@@ -13,7 +13,7 @@ describe("Cleanup summary", () => {
     await config.plugin("vercel@claude-plugins-official", { skills: ["deploy"] });
     await config.plugin("broken@market", { skills: ["oops"] });
     await config.plugin("idle@market", { skills: ["nap"] });
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const claude: ClaudeRunner = async ([, , id]) =>
       id === "broken@market"
         ? { exitCode: 1, output: '✘ Failed to uninstall plugin "broken@market": settings_still_on\n' }
@@ -44,7 +44,7 @@ describe("Cleanup summary", () => {
   it("prints no reinstall commands when no Plugin was removed", async () => {
     const config = await fakeConfigDir();
     await config.plugin("broken@market", { skills: ["oops"] });
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const claude: ClaudeRunner = async () => ({ exitCode: 1, output: "✘ nope" });
 
     const outcomes = await cleanup(result.installations, { configDir: config.path, trash: fakeTrash(config.home).move, runClaude: claude });
@@ -61,7 +61,7 @@ describe("Cleanup summary", () => {
     await config.linkedSkill("find-skills");
     await config.standaloneSkill("stuck");
     await config.standaloneSkill("ux-writing");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const stuck = join(config.path, "skills", "stuck");
     const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [stuck] });
 

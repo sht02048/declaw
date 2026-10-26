@@ -17,7 +17,7 @@ describe("planCleanup", () => {
   it("plans a Plugin's uninstall at user scope with the command that reinstalls it", async () => {
     const config = await fakeConfigDir();
     await config.plugin("vercel@claude-plugins-official", { skills: ["deploy"] });
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     const plan = planCleanup(named(result, "vercel@claude-plugins-official"), {
       configDir: config.path,
@@ -37,7 +37,7 @@ describe("planCleanup", () => {
     const config = await fakeConfigDir();
     const target = join(config.home, "My Skills", "it's-mine");
     await config.linkedSkill("find-skills", { target });
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     const plan = planCleanup(named(result, "find-skills"), { configDir: config.path });
 
@@ -56,7 +56,7 @@ describe("planCleanup", () => {
   it("plans moving a real Standalone Skill's folder to the system trash", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("ux-writing");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     const plan = planCleanup(named(result, "ux-writing"), { configDir: config.path });
 
@@ -69,7 +69,7 @@ describe("planCleanup", () => {
     const config = await fakeConfigDir();
     await config.syncedSkill("brand-voice");
     await config.standaloneSkill("ux-writing");
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
     const [synced, real] = named(result, "anthropic-skills:brand-voice", "ux-writing");
 
     const plan = planCleanup([synced!, real!], { configDir: config.path });

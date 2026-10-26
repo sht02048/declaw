@@ -15,7 +15,7 @@ describe("report: Plugin Inventory", () => {
     await config.plugin("vercel@claude-plugins-official");
     await config.plugin("frontend-design@claude-plugins-official", { scope: "project" });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result).map((plugin) => plugin.name)).toEqual([
       "skills@sht02048-skills",
@@ -36,7 +36,7 @@ describe("report: Plugin Inventory", () => {
     });
     await config.enabledPlugins({ "on@market": true, "off@market": false, "forced-on@market": true });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(
       Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.enabled])),
@@ -58,7 +58,7 @@ describe("report: Plugin Inventory", () => {
       mcpServers: { vercel: { type: "http", url: "https://mcp.vercel.com" } },
     });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]?.components).toEqual([
       { kind: "skill", name: "vercel:deploy", uses: 0, lastUse: null },
@@ -93,7 +93,7 @@ describe("report: Plugin Inventory", () => {
       },
     });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
       "skill toolkit:added",
@@ -115,7 +115,7 @@ describe("report: Plugin Inventory", () => {
       files: { "skills/AGENTS.md": "Notes for agents." },
     });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
       "skill toolkit:review",
@@ -137,7 +137,7 @@ describe("report: Plugin Inventory", () => {
       },
     });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
       "skill example-bundle:skill-a",
@@ -157,7 +157,7 @@ describe("report: Plugin Inventory", () => {
       },
     });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
       "agent curated:curated-choice",
@@ -187,7 +187,7 @@ describe("report: Plugin Inventory", () => {
     });
     await config.plugin("quiet@market");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(
       Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.hooks])),
@@ -212,7 +212,7 @@ describe("report: plugin skill Uses", () => {
       skillToolCall("oh-my-claudecode:plan", "2026-10-07T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)).toEqual([
       {
@@ -252,7 +252,7 @@ describe("report: plugin skill Uses", () => {
       skillToolCall("vercel:deploy", "2026-10-04T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(plugins(result)[0]).toMatchObject({
       uses: 1,

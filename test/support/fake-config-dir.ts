@@ -130,6 +130,10 @@ export class FakeConfigDir {
     return this;
   }
 
+  get paths(): { configDir: string; configFile: string } {
+    return { configDir: this.path, configFile: this.configFile };
+  }
+
   get home(): string {
     return dirname(this.path);
   }

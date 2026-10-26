@@ -1,7 +1,7 @@
 import { chmod, mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { report } from "../../src/engine/index.js";
+import { report, type ReportOptions } from "../../src/engine/index.js";
 import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
@@ -16,7 +16,7 @@ describe("report: Standalone Skill Usage Stats", () => {
       skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -44,7 +44,7 @@ describe("report: Standalone Skill Usage Stats", () => {
       skillToolCall("orca-linear", "2026-10-05T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -69,7 +69,7 @@ describe("report: Standalone Skill Usage Stats", () => {
       skillToolCall("skills:ux-writing", "2026-10-02T09:02:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toContainEqual({
       kind: "standalone-skill",
@@ -86,7 +86,7 @@ describe("report: Standalone Skill Usage Stats", () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("linear-ticket");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result).toEqual({
       period: { start: null, end: now },
@@ -121,12 +121,29 @@ describe("report: Standalone Skill Usage Stats", () => {
       userPrompt("hello", "2026-09-28T07:15:01.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.period).toEqual({
       start: new Date("2026-09-28T07:15:00.000Z"),
       end: now,
     });
+  });
+});
+
+describe("report: config file", () => {
+  it("reads the skill usage counter only from the config file it is given", async () => {
+    const config = await fakeConfigDir({ configFileInConfigDir: true });
+    await config.standaloneSkill("linear-ticket");
+    await config.skillUsage("linear-ticket", "2026-08-30T12:00:00.000Z");
+
+    // @ts-expect-error the config file has no default, so callers resolve it the way the CLI does
+    const withoutConfigFile: ReportOptions = { configDir: config.path, now };
+    expect(withoutConfigFile).not.toHaveProperty("configFile");
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "linear-ticket", lastUse: new Date("2026-08-30T12:00:00.000Z") },
+    ]);
   });
 });
 
@@ -139,7 +156,7 @@ describe("report: Linked Skills and Synced Skills", () => {
       skillToolCall("find-skills", "2026-10-11T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -160,7 +177,7 @@ describe("report: Linked Skills and Synced Skills", () => {
     await config.standaloneSkill("review");
     await config.skillsFolderFile("AGENTS.md", "Notes for agents.");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
   });
@@ -172,7 +189,7 @@ describe("report: Linked Skills and Synced Skills", () => {
     await config.skillsFolderDir("notes", { "README.md": "Notes." });
     await config.skillsFolderDir("empty");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
   });
@@ -184,7 +201,7 @@ describe("report: Linked Skills and Synced Skills", () => {
     await mkdir(target, { recursive: true });
     await symlink(target, join(config.path, "skills", "not-a-skill"));
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
   });
@@ -197,7 +214,7 @@ describe("report: Linked Skills and Synced Skills", () => {
       skillToolCall("release-notes", "2026-10-06T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -222,7 +239,7 @@ describe("report: Linked Skills and Synced Skills", () => {
       skillToolCall("anthropic-skills:docx", "2026-10-07T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -248,7 +265,7 @@ describe("report: skill history from the per-skill counter", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -274,7 +291,7 @@ describe("report: skill history from the per-skill counter", () => {
       skillToolCall("ux-writing", "2026-10-11T10:30:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -305,7 +322,7 @@ describe("report: skill history from the per-skill counter", () => {
     await config.pluginUsage("skills@sht02048-skills", "2026-10-20T08:00:00.000Z", 95);
     await config.pluginUsage("linear-ticket", "2026-10-20T08:00:00.000Z", 95);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       {
@@ -328,7 +345,7 @@ describe("report: plugin skill history from the per-skill counter", () => {
       skillToolCall("skills:pr", "2026-10-02T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -359,7 +376,7 @@ describe("report: plugin skill history from the per-skill counter", () => {
     await config.plugin("skills@sht02048-skills", { skills: ["commit"] });
     await config.skillUsage("skills:commit", "2026-08-30T12:00:00.000Z", 35);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "skills@sht02048-skills", uses: 0, lastUse: new Date("2026-08-30T12:00:00.000Z") },
@@ -375,7 +392,7 @@ describe("report: read status of each data source", () => {
       skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources).toEqual({
       installRecords: { status: "readable" },
@@ -393,7 +410,7 @@ describe("report: read status of each data source", () => {
       skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.transcripts).toEqual({
       status: "partial",
@@ -421,7 +438,7 @@ describe("report: read status of each data source", () => {
       skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.skillUsageCounter).toEqual({
       status: "unreadable",
@@ -454,7 +471,7 @@ describe("report: read status of each data source", () => {
     await config.standaloneSkill("orca-linear");
     await config.removeConfigFile();
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.skillUsageCounter).toEqual({
       status: "unreadable",
@@ -478,7 +495,7 @@ describe("report: read status of each data source", () => {
     await config.standaloneSkill("orca-linear");
     await writeFile(config.configFile, JSON.stringify({ skillUsage: [1, 2, 3] }));
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.skillUsageCounter).toEqual({
       status: "unreadable",
@@ -511,7 +528,7 @@ describe("report: read status of each data source", () => {
       }),
     );
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.skillUsageCounter).toEqual({
       status: "partial",
@@ -550,7 +567,7 @@ describe("report: read status of each data source", () => {
     ]);
     await chmod(join(config.path, "projects", "-work-app", "s2.jsonl"), 0o000);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.transcripts).toEqual({
       status: "partial",
@@ -576,7 +593,7 @@ describe("report: read status of each data source", () => {
     await config.skillUsage("orca-linear", "2026-08-14T12:00:00.000Z");
     await writeFile(join(config.path, "projects"), "not a directory");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.transcripts).toEqual({
       status: "unreadable",
@@ -610,7 +627,7 @@ describe("report: read status of each data source", () => {
     await config.standaloneSkill("linear-ticket");
     await config.removeInstallRecords();
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.installRecords).toEqual({
       status: "unreadable",
@@ -625,7 +642,7 @@ describe("report: read status of each data source", () => {
     await config.standaloneSkill("linear-ticket");
     await config.corruptInstallRecords();
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.sources.installRecords).toEqual({
       status: "unreadable",
@@ -639,7 +656,7 @@ describe("report: read status of each data source", () => {
     await config.plugin("oh-my-claudecode@omc", { skills: ["review"], agents: ["executor"] });
     await writeFile(join(config.path, "projects"), "not a directory");
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toEqual([
       {
@@ -668,7 +685,7 @@ describe("report: read status of each data source", () => {
       skillToolCall("skills:pr", "2026-10-02T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       {
@@ -691,7 +708,7 @@ describe("report: read status of each data source", () => {
       userPrompt("hello", "2026-10-02T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "skills@sht02048-skills", uses: 0, lastUse: "unknown" },
@@ -710,7 +727,7 @@ describe("report: read status of each data source", () => {
     ]);
     await chmod(join(config.path, "projects", "-work-app", "s2.jsonl"), 0o000);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "skills@sht02048-skills", uses: 1, lastUse: "unknown" },

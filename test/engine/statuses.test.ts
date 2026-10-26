@@ -18,7 +18,7 @@ describe("report: Statuses", () => {
       userPrompt("hello", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(statuses(result)).toEqual({ "old@market": "unused", "new@market": "too-new" });
   });
@@ -32,7 +32,7 @@ describe("report: Statuses", () => {
       userPrompt("hello", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(statuses(result)).toEqual({
       "old-skill": "unused",
@@ -55,7 +55,7 @@ describe("report: Statuses", () => {
       userPrompt("hello", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(statuses(result)).toEqual({ "new-link": "too-new", "old-link": "unused" });
   });
@@ -65,7 +65,7 @@ describe("report: Statuses", () => {
     await config.plugin("old@market", { installedAt: "2025-01-01T00:00:00.000Z" });
     await config.standaloneSkill("old-skill", { createdAt: "2025-01-01T00:00:00.000Z" });
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(statuses(result)).toEqual({ "old@market": "too-new", "old-skill": "too-new" });
   });
@@ -82,7 +82,7 @@ describe("report: Statuses", () => {
       skillToolCall("linear-ticket", "2026-10-03T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(statuses(result)).toEqual({
       "vercel@market": "used",
@@ -100,7 +100,7 @@ describe("report: Statuses", () => {
       userPrompt("hello", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "orca-linear", uses: 0, status: "used", recommended: false },
@@ -117,7 +117,7 @@ describe("report: Statuses", () => {
       userPrompt("hello", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "switched-off@market", lastUse: "unknown", status: "unknown", recommended: true },
@@ -146,7 +146,7 @@ describe("report: sorting", () => {
       skillToolCall("b-used-late:work", "2026-10-09T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map((i) => i.name)).toEqual([
       "c-unused-oldest",
@@ -168,7 +168,7 @@ describe("report: sorting", () => {
       skillToolCall("used-skill", "2026-10-02T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations.map((i) => i.name)).toEqual([
       "idle-skill",
@@ -192,7 +192,7 @@ describe("report: the recommended Cleanup set", () => {
       skillToolCall("linear-ticket", "2026-10-03T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(recommended(result).sort()).toEqual(["find-skills", "idle@market", "ux-writing"]);
   });
@@ -206,7 +206,7 @@ describe("report: the recommended Cleanup set", () => {
       skillToolCall("switched-off:work", "2026-10-02T09:00:00.000Z"),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(recommended(result)).toEqual(["switched-off@market"]);
   });
@@ -222,7 +222,7 @@ describe("report: the recommended Cleanup set", () => {
       userPrompt("go", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(recommended(result)).toEqual([]);
   });
@@ -234,7 +234,7 @@ describe("report: the recommended Cleanup set", () => {
       userPrompt("go", periodStart),
     ]);
 
-    const result = await report({ configDir: config.path, now });
+    const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
       { name: "anthropic-skills:docx", status: "unused", recommended: false },
