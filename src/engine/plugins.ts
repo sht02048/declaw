@@ -13,6 +13,7 @@ export interface ComponentEntry {
 
 export interface PluginEntry {
   key: string;
+  namespace: string;
   enabled: boolean;
   hooks: number;
   components: ComponentEntry[];
@@ -41,7 +42,7 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
     const components = await findComponents(record.installPath, namespace, manifest);
     const hooks = await countHooks(record.installPath, manifest.hooks);
-    plugins.push({ key, enabled, hooks, components });
+    plugins.push({ key, namespace, enabled, hooks, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }

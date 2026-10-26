@@ -236,6 +236,19 @@ export function hookRun(hookEvent: string, timestamp: string): TranscriptLine {
   };
 }
 
+export function mcpToolCall(toolName: string, timestamp: string): TranscriptLine {
+  toolUseCounter += 1;
+  return {
+    type: "assistant",
+    timestamp,
+    isSidechain: false,
+    message: {
+      role: "assistant",
+      content: [{ type: "tool_use", id: `toolu_${toolUseCounter}`, name: toolName, input: {} }],
+    },
+  };
+}
+
 export function agentToolCall(
   subagentType: string,
   timestamp: string,

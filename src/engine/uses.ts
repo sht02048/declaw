@@ -1,6 +1,6 @@
 import type { TranscriptEntry } from "./transcripts.js";
 
-export type UseKind = "invoke" | "agent";
+export type UseKind = "invoke" | "agent" | "mcp";
 
 export interface Use {
   kind: UseKind;
@@ -29,6 +29,8 @@ export function usesIn(entry: TranscriptEntry): Use[] {
       uses.push({ kind: "invoke", name: block.input.skill, at });
     } else if (AGENT_TOOLS.has(block.name) && typeof block.input?.subagent_type === "string") {
       uses.push({ kind: "agent", name: block.input.subagent_type, at });
+    } else if (typeof block.name === "string" && block.name.startsWith("mcp__")) {
+      uses.push({ kind: "mcp", name: block.name, at });
     }
   }
   return uses;

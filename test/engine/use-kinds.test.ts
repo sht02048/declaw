@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { report, type Plugin, type Report } from "../../src/engine/index.js";
-import { agentToolCall, fakeConfigDir, slashCommand } from "../support/fake-config-dir.js";
+import {
+  agentToolCall,
+  fakeConfigDir,
+  mcpToolCall,
+  slashCommand,
+} from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
 
@@ -101,6 +106,70 @@ describe("report: slash command Uses", () => {
     expect(result.installations.map(({ name, uses }) => ({ name, uses }))).toEqual([
       { name: "skills@sht02048-skills", uses: 0 },
       { name: "linear-ticket", uses: 0 },
+    ]);
+  });
+});
+
+describe("report: MCP tool Uses", () => {
+  it("counts an MCP tool call as a Use of the Plugin's MCP server, splitting names by known plugins and server keys", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("oh-my-claudecode@omc", {
+      mcpServers: { t: { command: "node", args: ["./bridge/mcp-server.cjs"] } },
+    });
+    await config.plugin("data_tools@market", {
+      mcpServers: { db_admin: { command: "db-server" } },
+    });
+    await config.plugin("vercel@claude-plugins-official", {
+      mcpServers: {
+        vercel: { type: "http", url: "https://mcp.vercel.com" },
+        "chrome.devtools": { command: "devtools-server" },
+      },
+    });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__plugin_oh-my-claudecode_t__ast_grep_search", "2026-10-05T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_oh-my-claudecode_t__lsp_hover", "2026-10-06T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_data_tools_db_admin__run_query", "2026-10-06T10:00:00.000Z"),
+      mcpToolCall("mcp__plugin_vercel_vercel__list_projects", "2026-10-07T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_vercel_chrome_devtools__take_screenshot", "2026-10-08T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_vercel_unknown__call", "2026-10-09T09:00:00.000Z"),
+      mcpToolCall("mcp__context7__query-docs", "2026-10-09T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(
+      plugins(result).map(({ name, uses, components }) => ({
+        name,
+        uses,
+        components: components.map(({ name, uses, lastUse }) => ({ name, uses, lastUse })),
+      })),
+    ).toEqual([
+      {
+        name: "data_tools@market",
+        uses: 1,
+        components: [
+          { name: "data_tools:db_admin", uses: 1, lastUse: new Date("2026-10-06T10:00:00.000Z") },
+        ],
+      },
+      {
+        name: "oh-my-claudecode@omc",
+        uses: 2,
+        components: [
+          { name: "oh-my-claudecode:t", uses: 2, lastUse: new Date("2026-10-06T09:00:00.000Z") },
+        ],
+      },
+      {
+        name: "vercel@claude-plugins-official",
+        uses: 2,
+        components: [
+          {
+            name: "vercel:chrome.devtools",
+            uses: 1,
+            lastUse: new Date("2026-10-08T09:00:00.000Z"),
+          },
+          { name: "vercel:vercel", uses: 1, lastUse: new Date("2026-10-07T09:00:00.000Z") },
+        ],
+      },
     ]);
   });
 });
