@@ -12,6 +12,14 @@ export type { ReadStatus } from "./read-status.js";
 export type { Status } from "./statuses.js";
 export { isRemovable, planCleanup } from "./plan.js";
 export type { PlannedAction, PlanOptions } from "./plan.js";
+export { cleanup } from "./cleanup.js";
+export type {
+  ClaudeRunner,
+  ClaudeRunResult,
+  CleanupOptions,
+  CleanupOutcome,
+  TrashMover,
+} from "./cleanup.js";
 
 export interface ReportOptions {
   configDir: string;
