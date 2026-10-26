@@ -45,7 +45,7 @@ async function perform(action: PlannedAction, { trash }: CleanupOptions): Promis
       await trash(action.path);
       return;
     case "uninstall-plugin":
-      return;
+      throw new Error("Plugin uninstall is not implemented yet");
   }
 }
 

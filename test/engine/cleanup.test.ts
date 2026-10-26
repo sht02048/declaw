@@ -127,4 +127,52 @@ describe("cleanup", () => {
     expect(await readdir(target)).toEqual(["SKILL.md"]);
     expect(trash.moves).toEqual([]);
   });
+
+  it("touches only the selected Installations", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("idle@market", { skills: ["nap"] });
+    await config.standaloneSkill("keep-me");
+    await config.standaloneSkill("ux-writing");
+    await config.linkedSkill("find-skills");
+    await config.syncedSkill("brand-voice");
+    const result = await report({ configDir: config.path, now });
+    const { trash, claude, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "ux-writing", "anthropic-skills:brand-voice"), options);
+
+    expect(outcomes.map((outcome) => outcome.name)).toEqual(["ux-writing"]);
+    expect(trash.moves).toEqual([join(config.path, "skills", "ux-writing")]);
+    expect(claude.calls).toEqual([]);
+    expect((await readdir(join(config.path, "skills"))).sort()).toEqual(["find-skills", "keep-me", "synced"]);
+    expect(await readdir(join(config.path, "skills", "synced", "org_account"))).toContain("brand-voice");
+    const after = await report({ configDir: config.path, now });
+    expect(after.installations.map((installation) => installation.name).sort()).toEqual([
+      "anthropic-skills:brand-voice",
+      "find-skills",
+      "idle@market",
+      "keep-me",
+    ]);
+  });
+
+  it("reports a Plugin uninstall as not implemented yet and leaves the Plugin installed", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("idle@market", { skills: ["nap"] });
+    await config.standaloneSkill("ux-writing");
+    const result = await report({ configDir: config.path, now });
+    const { claude, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "idle@market", "ux-writing"), options);
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({
+        name: "idle@market",
+        result: "failed",
+        message: "Plugin uninstall is not implemented yet",
+      }),
+      expect.objectContaining({ name: "ux-writing", result: "removed" }),
+    ]);
+    expect(claude.calls).toEqual([]);
+    const after = await report({ configDir: config.path, now });
+    expect(after.installations.map((installation) => installation.name)).toEqual(["idle@market"]);
+  });
 });
