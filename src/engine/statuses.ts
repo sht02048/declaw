@@ -3,7 +3,7 @@ export type Status = "unused" | "used" | "too-new" | "unknown";
 interface Judgeable {
   installedAt: Date | null;
   lastUse: Date | null | "unknown";
-  enabled?: boolean;
+  enabled?: boolean | "unknown";
   synced?: true;
 }
 

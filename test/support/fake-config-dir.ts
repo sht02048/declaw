@@ -125,6 +125,17 @@ export class FakeConfigDir {
     return this;
   }
 
+  async corruptJson(file: string): Promise<this> {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, '{"cut off": ');
+    return this;
+  }
+
+  pluginFile(key: string, relativePath: string, version = "1.0.0"): string {
+    const [name, marketplace] = key.split("@") as [string, string];
+    return join(this.path, "plugins", "cache", marketplace, name, version, relativePath);
+  }
+
   async enabledPlugins(enabledPlugins: Record<string, boolean>): Promise<this> {
     await writeJson(join(this.path, "settings.json"), { enabledPlugins });
     return this;

@@ -1,9 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { plural } from "../plural.js";
 import { exists, isSkillFolder, listDir } from "./fs.js";
-import { readable, readJsonFile, unreadable, type ReadStatus } from "./read-status.js";
-
-type JsonObject = Record<string, unknown>;
+import {
+  isJsonObject,
+  partiallyReadable,
+  readable,
+  readJsonFile,
+  readOptionalJsonFile,
+  unreadable,
+  type JsonObject,
+  type ReadStatus,
+  type Unknown,
+} from "./read-status.js";
 
 export type ComponentKind = "skill" | "command" | "agent" | "mcp-server";
 
@@ -16,29 +25,40 @@ export interface PluginEntry {
   key: string;
   namespace: string;
   installedAt: Date | null;
-  enabled: boolean;
-  hooks: number;
-  components: ComponentEntry[];
+  enabled: boolean | Unknown;
+  hooks: number | Unknown;
+  components: ComponentEntry[] | Unknown;
 }
 
 export interface PluginInventory {
-  status: ReadStatus;
+  installRecords: ReadStatus;
+  settings: ReadStatus;
+  pluginFiles: ReadStatus;
   plugins: PluginEntry[];
 }
 
 export async function findPlugins(configDir: string): Promise<PluginInventory> {
+  const settingsFile = await readOptionalJsonFile(join(configDir, "settings.json"), "settings");
+  const enabledPlugins = settingsFile.value === undefined ? null : asObject(settingsFile.value?.enabledPlugins);
+  const settings = settingsFile.status;
+
   const installed = await readJsonFile(join(configDir, "plugins", "installed_plugins.json"), "install records");
-  if (!installed.ok) return { status: installed.status, plugins: [] };
+  if (!installed.ok) return { installRecords: installed.status, settings, pluginFiles: readable, plugins: [] };
   const records = (installed.value as JsonObject | null)?.plugins;
   if (typeof records !== "object" || records === null || Array.isArray(records)) {
-    return { status: unreadable("plugins in install records is not an object"), plugins: [] };
+    return {
+      installRecords: unreadable("plugins in install records is not an object"),
+      settings,
+      pluginFiles: readable,
+      plugins: [],
+    };
   }
 
-  const settings = await readJson(join(configDir, "settings.json"));
-  const enabledPlugins = asObject(settings?.enabledPlugins);
-  const marketplaces = asObject(
-    await readJson(join(configDir, "plugins", "known_marketplaces.json")),
+  const knownMarketplaces = await readOptionalJsonFile(
+    join(configDir, "plugins", "known_marketplaces.json"),
+    "known marketplaces",
   );
+  const marketplaces = knownMarketplaces.value === undefined ? null : (knownMarketplaces.value ?? {});
 
   const plugins: PluginEntry[] = [];
   for (const [key, scopes] of Object.entries(records)) {
@@ -46,19 +66,52 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
       .map(asObject)
       .find((candidate) => candidate.scope === "user");
     if (!record || typeof record.installPath !== "string") continue;
+    const root = record.installPath;
 
-    const pluginJson = await readJson(join(record.installPath, ".claude-plugin", "plugin.json"));
-    const entry = await marketplaceEntry(marketplaces, key);
-    const manifest = pluginJson === null || entry?.strict === false ? (entry ?? {}) : pluginJson;
-    const setting = enabledPlugins[key];
-    const enabled = typeof setting === "boolean" ? setting : manifest.defaultEnabled !== false;
-    const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
-    const components = await findComponents(record.installPath, namespace, manifest);
-    const hooks = await countHooks(record.installPath, manifest.hooks);
+    const manifest = await attempt(() => manifestOf(root, key, marketplaces));
+    const setting = enabledPlugins?.[key];
+    const enabled =
+      typeof setting === "boolean"
+        ? setting
+        : enabledPlugins === null || manifest === "unknown"
+          ? "unknown"
+          : manifest.defaultEnabled !== false;
+    const namespace = manifest !== "unknown" && typeof manifest.name === "string" ? manifest.name : pluginName(key);
+    const components =
+      manifest === "unknown" ? manifest : await attempt(() => findComponents(root, namespace, manifest));
+    const hooks = manifest === "unknown" ? manifest : await attempt(() => countHooks(root, manifest.hooks));
     const installedAt = dateIn(record.installedAt);
     plugins.push({ key, namespace, installedAt, enabled, hooks, components });
   }
-  return { status: readable, plugins: plugins.sort((a, b) => a.key.localeCompare(b.key)) };
+
+  const unreadablePlugins = plugins.filter(
+    (plugin) => plugin.components === "unknown" || plugin.hooks === "unknown",
+  ).length;
+  const problems = [
+    knownMarketplaces.status.status !== "readable" && knownMarketplaces.status.reason,
+    unreadablePlugins > 0 && `files of ${unreadablePlugins} ${plural(unreadablePlugins, "Plugin")} could not be read`,
+  ].filter((problem) => problem !== false);
+  return {
+    installRecords: readable,
+    settings,
+    pluginFiles: problems.length === 0 ? readable : partiallyReadable(problems.join("; ")),
+    plugins: plugins.sort((a, b) => a.key.localeCompare(b.key)),
+  };
+}
+
+async function manifestOf(root: string, key: string, marketplaces: JsonObject | null): Promise<JsonObject> {
+  if (marketplaces === null) throw new Error("known marketplaces could not be read");
+  const pluginJson = await readJson(join(root, ".claude-plugin", "plugin.json"));
+  const entry = await marketplaceEntry(marketplaces, key);
+  return pluginJson === null || entry?.strict === false ? (entry ?? {}) : pluginJson;
+}
+
+async function attempt<T>(read: () => Promise<T>): Promise<T | Unknown> {
+  try {
+    return await read();
+  } catch {
+    return "unknown";
+  }
 }
 
 async function findComponents(
@@ -175,12 +228,17 @@ function marketplaceName(key: string): string {
 }
 
 async function readJson(file: string): Promise<JsonObject | null> {
+  let text: string;
   try {
-    return asObject(JSON.parse(await readFile(file, "utf8")));
+    text = await readFile(file, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return null;
     throw error;
   }
+  const value: unknown = JSON.parse(text);
+  if (!isJsonObject(value)) throw new Error(`${file} is not a JSON object`);
+  return value;
 }
 
 function asObject(value: unknown): JsonObject {

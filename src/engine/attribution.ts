@@ -26,7 +26,7 @@ export class UsageLedger {
   constructor(plugins: PluginEntry[], skills: StandaloneSkillEntry[]) {
     for (const skill of skills) this.open("invoke", skill.name);
     for (const plugin of plugins) {
-      for (const component of plugin.components) {
+      for (const component of plugin.components === "unknown" ? [] : plugin.components) {
         this.open(USE_KIND_OF[component.kind], component.name);
         if (component.kind === "mcp-server") this.addMcpServer(plugin, component);
       }

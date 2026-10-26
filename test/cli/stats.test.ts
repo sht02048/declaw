@@ -1,4 +1,4 @@
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { run } from "../../src/cli/main.js";
 import {
@@ -49,6 +49,8 @@ describe("declaw stats", () => {
       period: { start: "2026-09-28T07:15:00.000Z", end: "2026-10-26T00:00:00.000Z" },
       sources: {
         installRecords: { status: "readable" },
+        settings: { status: "readable" },
+        pluginFiles: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
       },
@@ -153,9 +155,11 @@ describe("declaw stats", () => {
 
     const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
 
-    expect(stdout.split("\n").slice(0, 4)).toEqual([
+    expect(stdout.split("\n").slice(0, 6)).toEqual([
       "Usage Stats from 2026-09-28 to 2026-10-26",
       "Install records: readable",
+      "Settings: readable",
+      "Plugin files: readable",
       "Transcripts: readable",
       "Skill usage counter: unreadable (config file not found)",
     ]);
@@ -187,6 +191,23 @@ describe("declaw stats", () => {
       uses: 0,
       lastUse: "2026-08-14T12:00:00.000Z",
     });
+  });
+
+  it("completes with every plugin-side JSON file corrupt", async () => {
+    const config = await exampleConfig();
+    await config.plugin("pl@market", { skills: ["s1"] });
+    await config.corruptJson(config.pluginFile("pl@market", ".claude-plugin/plugin.json"));
+    await config.corruptJson(join(config.path, "settings.json"));
+
+    const text = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
+    const json = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
+
+    expect([text.exitCode, json.exitCode]).toEqual([0, 0]);
+    expect(text.stdout).toContain("Settings: unreadable (settings is not valid JSON)");
+    expect(text.stdout).toContain("Plugin files: partial (files of 1 Plugin could not be read)");
+    expect(JSON.parse(json.stdout).installations).toContainEqual(
+      expect.objectContaining({ name: "pl@market", uses: "unknown", hooks: "unknown" }),
+    );
   });
 
   it("never prints the config file's other keys", async () => {

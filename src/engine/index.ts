@@ -1,13 +1,13 @@
 import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
-import { partiallyReadable, readable, unreadable, type ReadStatus } from "./read-status.js";
+import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
 import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
 import { judge, sortForCleanup, type Status } from "./statuses.js";
 import { findTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
-export type { ReadStatus } from "./read-status.js";
+export type { ReadStatus, Unknown } from "./read-status.js";
 export type { Status } from "./statuses.js";
 export { isRemovable, planCleanup } from "./plan.js";
 export type { PlannedAction, PlanOptions } from "./plan.js";
@@ -30,8 +30,6 @@ export interface CoveredPeriod {
   start: Date | null;
   end: Date;
 }
-
-export type Unknown = "unknown";
 
 export interface StandaloneSkill {
   kind: "standalone-skill";
@@ -58,8 +56,8 @@ export interface Plugin {
   installedAt: Date | null;
   status: Status;
   recommended: boolean;
-  enabled: boolean;
-  hooks: number;
+  enabled: boolean | Unknown;
+  hooks: number | Unknown;
   uses: number | Unknown;
   lastUse: Date | null | Unknown;
   components: Component[];
@@ -69,6 +67,8 @@ export type Installation = Plugin | StandaloneSkill;
 
 export interface DataSources {
   installRecords: ReadStatus;
+  settings: ReadStatus;
+  pluginFiles: ReadStatus;
   transcripts: ReadStatus;
   skillUsageCounter: ReadStatus;
 }
@@ -88,7 +88,7 @@ export async function report({
   configFile,
   now,
 }: ReportOptions): Promise<Report> {
-  const { status: installRecords, plugins } = await findPlugins(configDir);
+  const { installRecords, settings, pluginFiles, plugins } = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
   const transcripts = await readTranscriptUsage(configDir, new UsageLedger(plugins, skills));
   const counter = await readSkillUsageCounter(configFile);
@@ -104,6 +104,8 @@ export async function report({
     period: { start: transcripts.start, end: now },
     sources: {
       installRecords,
+      settings,
+      pluginFiles,
       transcripts: transcripts.status,
       skillUsageCounter: counter.status,
     },
@@ -133,7 +135,7 @@ function pluginInstallation(
   usageOf: (inPeriod: UsageTally | null, counterKey: string | null) => Usage,
   transcripts: TranscriptUsage,
 ): Omit<Plugin, "status" | "recommended"> {
-  const components = plugin.components.map(
+  const components = (plugin.components === "unknown" ? [] : plugin.components).map(
     (component): Component => ({
       ...component,
       ...usageOf(
@@ -142,7 +144,7 @@ function pluginInstallation(
       ),
     }),
   );
-  let uses: number | Unknown = transcripts.ledger === null ? "unknown" : 0;
+  let uses: number | Unknown = transcripts.ledger === null || plugin.components === "unknown" ? "unknown" : 0;
   for (const component of components) {
     uses = uses === "unknown" || component.uses === "unknown" ? "unknown" : uses + component.uses;
   }
@@ -153,10 +155,13 @@ function pluginInstallation(
     enabled: plugin.enabled,
     hooks: plugin.hooks,
     uses,
-    lastUse: latestLastUse(
-      components.map((component) => component.lastUse),
-      transcripts.status.status === "readable" ? transcripts.start : null,
-    ),
+    lastUse:
+      plugin.components === "unknown"
+        ? "unknown"
+        : latestLastUse(
+            components.map((component) => component.lastUse),
+            transcripts.status.status === "readable" ? transcripts.start : null,
+          ),
     components,
   };
 }

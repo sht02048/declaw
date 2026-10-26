@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { report, type Plugin, type Report } from "../../src/engine/index.js";
 import { fakeConfigDir, skillToolCall } from "../support/fake-config-dir.js";
@@ -257,6 +258,111 @@ describe("report: plugin skill Uses", () => {
     expect(plugins(result)[0]).toMatchObject({
       uses: 1,
       components: [{ kind: "command", name: "vercel:deploy", uses: 1 }],
+    });
+  });
+});
+
+describe("report: unreadable plugin files", () => {
+  async function twoPlugins() {
+    const config = await fakeConfigDir();
+    const hooks = { SessionStart: [{ hooks: [{ type: "command", command: "true" }] }] };
+    await config.plugin("broken@market", { skills: ["review"], hooks });
+    await config.plugin("healthy@market", { skills: ["commit"], hooks });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("broken:review", "2026-10-08T09:00:00.000Z"),
+      skillToolCall("healthy:commit", "2026-10-09T09:00:00.000Z"),
+    ]);
+    return config;
+  }
+
+  it("marks settings and plugin files readable when there is no settings file", async () => {
+    const config = await twoPlugins();
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.settings).toEqual({ status: "readable" });
+    expect(result.sources.pluginFiles).toEqual({ status: "readable" });
+  });
+
+  it("marks a corrupt settings file unreadable and every Plugin's enabled setting unknown", async () => {
+    const config = await twoPlugins();
+    await config.corruptJson(join(config.path, "settings.json"));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.settings).toEqual({ status: "unreadable", reason: "settings is not valid JSON" });
+    expect(plugins(result).map((plugin) => [plugin.name, plugin.enabled])).toEqual([
+      ["broken@market", "unknown"],
+      ["healthy@market", "unknown"],
+    ]);
+  });
+
+  it("shows only the Plugin with a corrupt manifest as unknown", async () => {
+    const config = await twoPlugins();
+    await config.corruptJson(config.pluginFile("broken@market", ".claude-plugin/plugin.json"));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.pluginFiles).toEqual({
+      status: "partial",
+      reason: "files of 1 Plugin could not be read",
+    });
+    expect(plugins(result)).toMatchObject([
+      { name: "broken@market", status: "unknown", uses: "unknown", lastUse: "unknown", hooks: "unknown" },
+      { name: "healthy@market", status: "used", uses: 1, hooks: 1 },
+    ]);
+  });
+
+  it("shows a Plugin's Uses as unknown when its MCP config is corrupt, keeping its hooks", async () => {
+    const config = await twoPlugins();
+    await config.corruptJson(config.pluginFile("broken@market", ".mcp.json"));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(plugins(result).find((plugin) => plugin.name === "broken@market")).toMatchObject({
+      uses: "unknown",
+      hooks: 1,
+    });
+  });
+
+  it("shows a Plugin's hooks as unknown when its hook config is corrupt, keeping its Uses", async () => {
+    const config = await twoPlugins();
+    await config.corruptJson(config.pluginFile("broken@market", "hooks/hooks.json"));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(plugins(result).find((plugin) => plugin.name === "broken@market")).toMatchObject({
+      uses: 1,
+      hooks: "unknown",
+    });
+  });
+
+  it("shows every Plugin's Uses as unknown when the known marketplaces file is corrupt", async () => {
+    const config = await twoPlugins();
+    await config.corruptJson(join(config.path, "plugins", "known_marketplaces.json"));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.pluginFiles).toEqual({
+      status: "partial",
+      reason: "known marketplaces is not valid JSON; files of 2 Plugins could not be read",
+    });
+    expect(plugins(result).map((plugin) => plugin.uses)).toEqual(["unknown", "unknown"]);
+  });
+
+  it("shows a marketplace's Plugins' Uses as unknown when its catalog is corrupt", async () => {
+    const config = await twoPlugins();
+    await config.plugin("other@elsewhere", { skills: ["lint"] });
+    await config.corruptJson(
+      join(config.path, "plugins", "marketplaces", "market", ".claude-plugin", "marketplace.json"),
+    );
+
+    const result = await report({ ...config.paths, now });
+
+    expect(Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.uses]))).toEqual({
+      "broken@market": "unknown",
+      "healthy@market": "unknown",
+      "other@elsewhere": 0,
     });
   });
 });

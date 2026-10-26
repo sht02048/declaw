@@ -2,6 +2,8 @@ import type { CoveredPeriod, DataSources, Installation, ReadStatus, Status } fro
 
 export const SOURCE_LABELS: Record<keyof DataSources, string> = {
   installRecords: "Install records",
+  settings: "Settings",
+  pluginFiles: "Plugin files",
   transcripts: "Transcripts",
   skillUsageCounter: "Skill usage counter",
 };
@@ -21,7 +23,10 @@ export function kindLabel(installation: Installation): string {
 }
 
 export function note(installation: Installation): string {
-  if (installation.kind === "plugin") return installation.enabled ? "" : "disabled";
+  if (installation.kind === "plugin") {
+    if (installation.enabled === "unknown") return "may be disabled";
+    return installation.enabled ? "" : "disabled";
+  }
   if (installation.linked) return `links to ${installation.linked.target}`;
   if (installation.synced) return "managed by claude.ai";
   return "";

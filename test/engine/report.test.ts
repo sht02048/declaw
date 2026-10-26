@@ -92,6 +92,8 @@ describe("report: Standalone Skill Usage Stats", () => {
       period: { start: null, end: now },
       sources: {
         installRecords: { status: "readable" },
+        settings: { status: "readable" },
+        pluginFiles: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
       },
@@ -396,6 +398,8 @@ describe("report: read status of each data source", () => {
 
     expect(result.sources).toEqual({
       installRecords: { status: "readable" },
+      settings: { status: "readable" },
+      pluginFiles: { status: "readable" },
       transcripts: { status: "readable" },
       skillUsageCounter: { status: "readable" },
     });
