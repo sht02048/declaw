@@ -110,6 +110,21 @@ export class FakeConfigDir {
     await writeJson(join(this.path, "plugins", "known_marketplaces.json"), known);
   }
 
+  get installRecordsFile(): string {
+    return join(this.path, "plugins", "installed_plugins.json");
+  }
+
+  async removeInstallRecords(): Promise<this> {
+    await rm(this.installRecordsFile);
+    return this;
+  }
+
+  async corruptInstallRecords(): Promise<this> {
+    const records = JSON.stringify({ version: 2, plugins: this.installRecords });
+    await writeFile(this.installRecordsFile, records.slice(0, records.length / 2));
+    return this;
+  }
+
   async enabledPlugins(enabledPlugins: Record<string, boolean>): Promise<this> {
     await writeJson(join(this.path, "settings.json"), { enabledPlugins });
     return this;
@@ -194,6 +209,7 @@ export async function fakeConfigDir(options: FakeConfigDirOptions = {}): Promise
   await mkdir(path);
   const configFile = join(options.configFileInConfigDir ? path : root, ".claude.json");
   await writeFile(configFile, JSON.stringify(SENSITIVE_CONFIG_FILE_KEYS));
+  await writeJson(join(path, "plugins", "installed_plugins.json"), { version: 2, plugins: {} });
   return new FakeConfigDir(path, configFile);
 }
 

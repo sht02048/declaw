@@ -5,6 +5,7 @@ export function formatStatsJson(report: Report): string {
 }
 
 const SOURCE_LABELS: Record<keyof DataSources, string> = {
+  installRecords: "Install records",
   transcripts: "Transcripts",
   skillUsageCounter: "Skill usage counter",
 };

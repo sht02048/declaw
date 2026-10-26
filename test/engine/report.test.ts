@@ -81,6 +81,7 @@ describe("report: Standalone Skill Usage Stats", () => {
     expect(result).toEqual({
       period: { start: null, end: now },
       sources: {
+        installRecords: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
       },
@@ -251,6 +252,7 @@ describe("report: read status of each data source", () => {
     const result = await report({ configDir: config.path, now });
 
     expect(result.sources).toEqual({
+      installRecords: { status: "readable" },
       transcripts: { status: "readable" },
       skillUsageCounter: { status: "readable" },
     });
@@ -420,5 +422,34 @@ describe("report: read status of each data source", () => {
       },
       { kind: "standalone-skill", name: "ux-writing", uses: "unknown", lastUse: "unknown" },
     ]);
+  });
+
+  it("marks missing install records unreadable", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.removeInstallRecords();
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.installRecords).toEqual({
+      status: "unreadable",
+      reason: "install records not found",
+    });
+    expect(result.installations.map((installation) => installation.name)).toEqual(["linear-ticket"]);
+  });
+
+  it("marks corrupt install records unreadable instead of failing the Report", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit"] });
+    await config.standaloneSkill("linear-ticket");
+    await config.corruptInstallRecords();
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.installRecords).toEqual({
+      status: "unreadable",
+      reason: "install records is not valid JSON",
+    });
+    expect(result.installations.map((installation) => installation.name)).toEqual(["linear-ticket"]);
   });
 });

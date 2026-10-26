@@ -47,6 +47,7 @@ describe("declaw stats", () => {
     expect(JSON.parse(stdout)).toEqual({
       period: { start: "2026-09-28T07:15:00.000Z", end: "2026-10-26T00:00:00.000Z" },
       sources: {
+        installRecords: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
       },
@@ -107,8 +108,9 @@ describe("declaw stats", () => {
 
     const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
 
-    expect(stdout.split("\n").slice(0, 3)).toEqual([
+    expect(stdout.split("\n").slice(0, 4)).toEqual([
       "Usage Stats from 2026-09-28 to 2026-10-26",
+      "Install records: readable",
       "Transcripts: readable",
       "Skill usage counter: unreadable (config file not found)",
     ]);

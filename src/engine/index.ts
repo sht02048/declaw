@@ -50,6 +50,7 @@ export interface Plugin {
 export type Installation = Plugin | StandaloneSkill;
 
 export interface DataSources {
+  installRecords: ReadStatus;
   transcripts: ReadStatus;
   skillUsageCounter: ReadStatus;
 }
@@ -69,7 +70,7 @@ export async function report({
   configFile = join(dirname(configDir), ".claude.json"),
   now,
 }: ReportOptions): Promise<Report> {
-  const plugins = await findPlugins(configDir);
+  const { status: installRecords, plugins } = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
   const skillToolNames = new Set(skills.map((skill) => skill.name));
   for (const plugin of plugins) {
@@ -90,7 +91,11 @@ export async function report({
 
   return {
     period: { start: transcripts.start, end: now },
-    sources: { transcripts: transcripts.status, skillUsageCounter: counter.status },
+    sources: {
+      installRecords,
+      transcripts: transcripts.status,
+      skillUsageCounter: counter.status,
+    },
     installations: [
       ...plugins.map((plugin) => pluginInstallation(plugin, usageOf, transcripts)),
       ...skills.map((skill): StandaloneSkill => ({
