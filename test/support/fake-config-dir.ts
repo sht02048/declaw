@@ -141,6 +141,13 @@ export class FakeConfigDir {
     return this;
   }
 
+  async skillsFolderFile(name: string, content = ""): Promise<this> {
+    const skillsDir = join(this.path, "skills");
+    await mkdir(skillsDir, { recursive: true });
+    await writeFile(join(skillsDir, name), content);
+    return this;
+  }
+
   async linkedSkill(
     name: string,
     {

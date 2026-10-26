@@ -155,6 +155,16 @@ describe("report: Linked Skills and Synced Skills", () => {
     ]);
   });
 
+  it("ignores a plain file sitting directly in the user's skills folder", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("review");
+    await config.skillsFolderFile("AGENTS.md", "Notes for agents.");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
+  });
+
   it("shows the absolute target of a relative link into a personal repository", async () => {
     const config = await fakeConfigDir();
     const target = join(config.home, "code", "my-skills", "release-notes");

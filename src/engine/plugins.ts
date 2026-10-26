@@ -179,7 +179,8 @@ async function exists(path: string): Promise<boolean> {
     await stat(path);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return false;
     throw error;
   }
 }
