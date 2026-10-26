@@ -61,9 +61,28 @@ describe("TUI", () => {
     expect(row).not.toContain("[x]");
     expect(selected(lastFrame()!)).toEqual([]);
   });
+
+  it("expands a Plugin to show Uses per Component, and collapses it again", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, DOWN, DOWN, DOWN, RIGHT);
+
+    const lines = lastFrame()!.split("\n");
+    const component = (name: string) => lines.find((line) => line.includes(name))?.split(/\s+/).filter(Boolean);
+    expect(component("vercel:deploy")).toEqual(["skill", "vercel:deploy", "1", "2026-10-09"]);
+    expect(component("vercel:logs")).toEqual(["skill", "vercel:logs", "0", "never"]);
+    expect(component("vercel:deployer")).toEqual(["agent", "vercel:deployer", "0", "never"]);
+
+    await press(stdin, LEFT);
+
+    expect(lastFrame()).not.toContain("vercel:deploy");
+  });
 });
 
 const DOWN = "\u001B[B";
+const RIGHT = "\u001B[C";
+const LEFT = "\u001B[D";
 
 async function press(stdin: { write: (data: string) => void }, ...keys: string[]) {
   for (const key of keys) {
