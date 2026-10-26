@@ -113,6 +113,30 @@ describe("TUI in a short terminal", () => {
     expect(lastFrame()).not.toContain("skill-00");
   });
 
+  it("reaches every Component of a Plugin expanded at the bottom of a long list", async () => {
+    const config = await fakeConfigDir();
+    for (let index = 0; index < 12; index++) await config.standaloneSkill(`skill-${index}`);
+    const components = ["a", "b", "c", "d", "e", "f"];
+    await config.plugin("big@market", { skills: components });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+      skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
+    ]);
+    const result = await report({ configDir: config.path, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    Object.defineProperty(stdout, "rows", { value: 12 });
+    stdout.emit("resize");
+
+    await press(stdin, ...Array.from({ length: 12 }, () => DOWN), RIGHT);
+    expect(lastFrame()).toContain("big:a");
+    await press(stdin, ...Array.from({ length: 6 }, () => DOWN));
+
+    const lines = lastFrame()!.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(12);
+    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(lastFrame()).toContain("big:f");
+  });
+
   it("scrolls a long confirmation screen under the covered period", async () => {
     const config = await fakeConfigDir();
     const names = Array.from({ length: 10 }, (_, index) => `skill-${String(index).padStart(2, "0")}`);

@@ -3,6 +3,7 @@ import { useReducer, useRef } from "react";
 import {
   isRemovable,
   planCleanup,
+  type Component,
   type Installation,
   type PlannedAction,
   type Report,
@@ -74,7 +75,7 @@ export function App({ report, configDir, dryRun }: AppProps) {
 
   let top: number;
   if (screen === "list") {
-    top = followFocus(heights, body.focus, room, listTop.current);
+    top = followFocus(heights, body.focus, body.focusEnd ?? body.focus, room, listTop.current);
     listTop.current = top;
   } else {
     top = Math.min(confirmTop, lastTop(heights, room));
@@ -161,15 +162,21 @@ function reducerFor(installations: Installation[]) {
           return state;
       }
     }
-    const current = installations[state.cursor];
+    const entries = entriesOf(installations, state.expanded);
+    const current = installations[entries[state.cursor]?.index ?? -1];
     switch (action.type) {
       case "up":
         return { ...state, cursor: Math.max(0, state.cursor - 1) };
       case "down":
-        return { ...state, cursor: Math.min(installations.length - 1, state.cursor + 1) };
-      case "expand":
+        return { ...state, cursor: Math.min(entries.length - 1, state.cursor + 1) };
+      case "expand": {
         if (!current) return state;
-        return { ...state, expanded: withName(state.expanded, current.name, action.open) };
+        const expanded = withName(state.expanded, current.name, action.open);
+        const row = entriesOf(installations, expanded).findIndex(
+          (entry) => installations[entry.index] === current && entry.component === undefined,
+        );
+        return { ...state, expanded, cursor: row };
+      }
       case "toggle":
         if (!current || !isRemovable(current)) return state;
         return {
@@ -202,6 +209,20 @@ function withName(names: ReadonlySet<string>, name: string, present: boolean): R
 interface Body {
   lines: Line[];
   focus: number;
+  focusEnd?: number;
+}
+
+interface Entry {
+  index: number;
+  component?: number;
+}
+
+function entriesOf(installations: Installation[], expanded: ReadonlySet<string>): Entry[] {
+  return installations.flatMap((installation, index): Entry[] => {
+    if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
+    const count = Math.max(1, installation.components.length);
+    return [{ index }, ...Array.from({ length: count }, (_, component) => ({ index, component }))];
+  });
 }
 
 function listLines(
@@ -211,43 +232,50 @@ function listLines(
   expanded: ReadonlySet<string>,
 ): Body {
   const widths = columnWidths(installations.map(installationCells));
-  const lines: Line[] = [];
-  let focus = 0;
-  installations.forEach((installation, index) => {
-    const onCursor = index === cursor;
-    if (onCursor) focus = lines.length;
+  const componentWidths = new Map(
+    installations.map((installation) => [
+      installation,
+      installation.kind === "plugin" ? columnWidths(installation.components.map(componentCells)) : [],
+    ]),
+  );
+  const entries = entriesOf(installations, expanded);
+  const lines = entries.map((entry, line): Line => {
+    const installation = installations[entry.index]!;
+    const onCursor = line === cursor;
+    const marker = onCursor ? ">" : " ";
+    const style = onCursor ? { style: "cursor" as const } : { style: "dim" as const };
+    if (entry.component !== undefined) {
+      const component = installation.kind === "plugin" ? installation.components[entry.component] : undefined;
+      const text = component
+        ? alignRow(componentCells(component), componentWidths.get(installation)!)
+        : "no Components found";
+      return {
+        key: `${installation.name} ${component ? `${component.kind} ${component.name}` : "none"}`,
+        text: `${marker}       ${text}`,
+        ...style,
+      };
+    }
     const checkbox = !isRemovable(installation)
       ? "   "
       : selection.has(installation.name)
         ? "[x]"
         : "[ ]";
     const recommended = installation.recommended ? "*" : " ";
-    lines.push({
+    return {
       key: installation.name,
-      text: `${onCursor ? ">" : " "} ${checkbox} ${recommended} ${alignRow(installationCells(installation), widths)}`,
-      ...(onCursor && { style: "cursor" as const }),
-    });
-    if (installation.kind === "plugin" && expanded.has(installation.name)) {
-      if (installation.components.length === 0) {
-        lines.push({ key: `${installation.name} none`, text: "        no Components found", style: "dim" });
-      }
-      const componentRows = installation.components.map((component) => [
-        component.kind,
-        component.name,
-        String(component.uses),
-        formatLastUse(component.lastUse),
-      ]);
-      const componentWidths = columnWidths(componentRows);
-      for (const row of componentRows) {
-        lines.push({
-          key: `${installation.name} ${row[0]} ${row[1]}`,
-          text: `        ${alignRow(row, componentWidths)}`,
-          style: "dim",
-        });
-      }
-    }
+      text: `${marker} ${checkbox} ${recommended} ${alignRow(installationCells(installation), widths)}`,
+      ...(onCursor && style),
+    };
   });
-  return { lines, focus };
+  let focusEnd = cursor;
+  if (entries[cursor]?.component === undefined) {
+    while (entries[focusEnd + 1]?.component !== undefined) focusEnd += 1;
+  }
+  return { lines, focus: cursor, focusEnd };
+}
+
+function componentCells(component: Component): string[] {
+  return [component.kind, component.name, String(component.uses), formatLastUse(component.lastUse)];
 }
 
 function installationCells(installation: Installation): string[] {
@@ -319,10 +347,16 @@ function windowFrom(heights: number[], top: number, room: number): View {
   return { start: top, end, above: top, below: heights.length - end };
 }
 
-function followFocus(heights: number[], focus: number, room: number, previousTop: number): number {
+function followFocus(
+  heights: number[],
+  focus: number,
+  focusEnd: number,
+  room: number,
+  previousTop: number,
+): number {
   if (fits(heights, room)) return 0;
   let top = Math.min(previousTop, focus);
-  while (windowFrom(heights, top, room).end <= focus) top += 1;
+  while (top < focus && windowFrom(heights, top, room).end <= focusEnd) top += 1;
   return top;
 }
 
