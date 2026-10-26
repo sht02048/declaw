@@ -25,6 +25,7 @@ import {
   isChild,
   listRowsOf,
 } from "./list.js";
+import { DetailPanel, detailLines } from "./detail.js";
 import { formatPeriodLine } from "./text.js";
 
 export interface AppProps {
@@ -93,13 +94,22 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
     problems: formatSources(report.sources, { problemsOnly: true }),
   });
   const footer = footerOf(state, dryRun);
-  const fixed = [...header, ...body.header, ...footer];
 
   const heightOf = (line: Line) =>
     line.text === undefined
       ? 1
       : wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
-  const room = Math.max(3, rows - 1 - fixed.reduce((sum, line) => sum + heightOf(line), 0));
+  const fixedHeight = [...header, ...body.header, ...footer].reduce((sum, line) => sum + heightOf(line), 0);
+  const detailContext = { now, periodStart: report.period.start, configDir };
+  const panelHeight = useMemo(
+    () => Math.max(0, ...installations.map((installation) => detailLines(installation, detailContext).length)) + 2,
+    [installations, now, configDir],
+  );
+  const current =
+    screen === "list" ? installations[listRowsOf(installations, state.expanded)[state.cursor]?.index ?? -1] : undefined;
+  const panel = current && rows - 1 - fixedHeight - panelHeight >= MIN_LIST_ROWS ? current : undefined;
+  const gap: Line[] = screen === "list" && !panel ? [{ key: "panel gap", content: "" }] : [];
+  const room = Math.max(3, rows - 1 - fixedHeight - (panel ? panelHeight : gap.length));
   const heights = body.lines.map(heightOf);
 
   let top: number;
@@ -139,26 +149,36 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      {[...header, ...body.header, ...shown, ...footer].map((line) =>
-        line.element !== undefined ? (
-          <Box key={line.key}>{line.element}</Box>
-        ) : line.text !== undefined ? (
-          <Text key={line.key} bold={line.style === "bold"} dimColor={line.style === "dim"}>
-            {line.text === "" ? " " : line.text}
-          </Text>
-        ) : (
-          <Text
-            key={line.key}
-            wrap="truncate-end"
-            bold={line.style === "bold"}
-            dimColor={line.style === "dim"}
-            {...(line.style === "warning" && { color: "yellow" })}
-          >
-            {line.content === "" || line.content === undefined ? " " : line.content}
-          </Text>
-        ),
+      {[...header, ...body.header, ...shown, ...gap].map(renderLine)}
+      {panel && (
+        <DetailPanel lines={detailLines(panel, detailContext)} height={panelHeight - 2} width={columns} />
       )}
+      {footer.map(renderLine)}
     </Box>
+  );
+}
+
+const MIN_LIST_ROWS = 6;
+
+function renderLine(line: Line): ReactNode {
+  if (line.element !== undefined) return <Box key={line.key}>{line.element}</Box>;
+  if (line.text !== undefined) {
+    return (
+      <Text key={line.key} bold={line.style === "bold"} dimColor={line.style === "dim"}>
+        {line.text === "" ? " " : line.text}
+      </Text>
+    );
+  }
+  return (
+    <Text
+      key={line.key}
+      wrap="truncate-end"
+      bold={line.style === "bold"}
+      dimColor={line.style === "dim"}
+      {...(line.style === "warning" && { color: "yellow" })}
+    >
+      {line.content === "" || line.content === undefined ? " " : line.content}
+    </Text>
   );
 }
 
@@ -385,7 +405,6 @@ function footerOf(state: State, dryRun: boolean): Line[] {
   switch (state.screen) {
     case "list":
       return [
-        { key: "footer gap", content: "" },
         ...(state.needsSelection
           ? [{ key: "hint", content: "Select at least one Installation to review.", style: "warning" as const }]
           : []),

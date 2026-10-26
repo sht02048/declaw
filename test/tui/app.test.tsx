@@ -370,6 +370,36 @@ describe("TUI groups", () => {
   });
 });
 
+describe("TUI detail panel", () => {
+  it("shows a Linked Skill's target and that a Synced Skill cannot be removed", async () => {
+    const config = await fakeConfigDir();
+    const target = join(config.home, ".agents", "skills", "find-skills");
+    await config.linkedSkill("find-skills", { target });
+    await config.syncedSkill("brand-voice");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ ...config.paths, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 200, rows: 40 });
+    await settle();
+    const withCursorOn = async (name: string) => {
+      for (let step = 0; step < 2 && !cursorLine(lastFrame()!).includes(name); step++) await press(stdin, DOWN);
+      return lastFrame()!;
+    };
+
+    const linked = await withCursorOn("find-skills");
+    expect(linked).toContain(`Links to ${target}`);
+    expect(linked).toContain("Unused  No Use since 2026-09-28");
+    expect(linked).not.toContain("cannot be removed");
+
+    await press(stdin, UP);
+    const synced = await withCursorOn("brand-voice");
+    expect(synced).toContain("Managed by claude.ai, cannot be removed");
+    expect(synced).not.toContain(`Links to ${target}`);
+  });
+});
+
 describe("TUI layout", () => {
   it("keeps every line on one terminal row, truncating long names with an ellipsis", async () => {
     const config = await fakeConfigDir();
@@ -420,6 +450,10 @@ function resize(stdout: NodeJS.EventEmitter, { columns, rows }: { columns: numbe
   Object.defineProperty(stdout, "columns", { value: columns, configurable: true });
   Object.defineProperty(stdout, "rows", { value: rows, configurable: true });
   stdout.emit("resize");
+}
+
+function cursorLine(frame: string): string {
+  return frame.split("\n").find((line) => line.startsWith("›")) ?? "";
 }
 
 function plain(frame: string): string {
