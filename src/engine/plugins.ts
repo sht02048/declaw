@@ -21,6 +21,9 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
   const installed = await readJson(join(configDir, "plugins", "installed_plugins.json"));
   const settings = await readJson(join(configDir, "settings.json"));
   const enabledPlugins = asObject(settings?.enabledPlugins);
+  const marketplaces = asObject(
+    await readJson(join(configDir, "plugins", "known_marketplaces.json")),
+  );
 
   const plugins: PluginEntry[] = [];
   for (const [key, records] of Object.entries(asObject(installed?.plugins))) {
@@ -29,11 +32,13 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
       .find((candidate) => candidate.scope === "user");
     if (!record || typeof record.installPath !== "string") continue;
 
-    const manifest = await readJson(join(record.installPath, ".claude-plugin", "plugin.json"));
+    const pluginJson = await readJson(join(record.installPath, ".claude-plugin", "plugin.json"));
+    const entry = await marketplaceEntry(marketplaces, key);
+    const manifest = pluginJson === null || entry?.strict === false ? (entry ?? {}) : pluginJson;
     const setting = enabledPlugins[key];
-    const enabled = typeof setting === "boolean" ? setting : manifest?.defaultEnabled !== false;
-    const namespace = typeof manifest?.name === "string" ? manifest.name : pluginName(key);
-    const components = await findComponents(record.installPath, namespace, manifest ?? {});
+    const enabled = typeof setting === "boolean" ? setting : manifest.defaultEnabled !== false;
+    const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
+    const components = await findComponents(record.installPath, namespace, manifest);
     plugins.push({ key, enabled, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
@@ -103,9 +108,22 @@ async function mcpServerKeys(root: string, declared: unknown): Promise<string[]>
   );
 }
 
+async function marketplaceEntry(marketplaces: JsonObject, key: string): Promise<JsonObject | null> {
+  const installLocation = asObject(marketplaces[marketplaceName(key)]).installLocation;
+  if (typeof installLocation !== "string") return null;
+  const catalog = await readJson(join(installLocation, ".claude-plugin", "marketplace.json"));
+  const entries = Array.isArray(catalog?.plugins) ? catalog.plugins.map(asObject) : [];
+  return entries.find((entry) => entry.name === pluginName(key)) ?? null;
+}
+
 function pluginName(key: string): string {
   const at = key.lastIndexOf("@");
   return at > 0 ? key.slice(0, at) : key;
+}
+
+function marketplaceName(key: string): string {
+  const at = key.lastIndexOf("@");
+  return at > 0 ? key.slice(at + 1) : "";
 }
 
 async function exists(path: string): Promise<boolean> {

@@ -20,12 +20,14 @@ export interface PluginFixture {
   agents?: string[];
   mcpServers?: JsonObject;
   files?: Record<string, string>;
+  marketplaceEntry?: JsonObject;
 }
 
 type JsonObject = Record<string, unknown>;
 
 export class FakeConfigDir {
   private readonly installRecords: Record<string, JsonObject[]> = {};
+  private readonly marketplaceEntries: Record<string, JsonObject[]> = {};
 
   constructor(readonly path: string) {}
 
@@ -70,7 +72,31 @@ export class FakeConfigDir {
       version: 2,
       plugins: this.installRecords,
     });
+
+    const entries = (this.marketplaceEntries[marketplace] ??= []);
+    if (!entries.some((entry) => entry.name === name)) {
+      entries.push({ name, source: `./plugins/${name}`, ...fixture.marketplaceEntry });
+    }
+    await this.writeMarketplaces();
     return this;
+  }
+
+  private async writeMarketplaces(): Promise<void> {
+    const known: JsonObject = {};
+    for (const [marketplace, plugins] of Object.entries(this.marketplaceEntries)) {
+      const installLocation = join(this.path, "plugins", "marketplaces", marketplace);
+      await writeJson(join(installLocation, ".claude-plugin", "marketplace.json"), {
+        name: marketplace,
+        owner: { name: "Marketplace Owner" },
+        plugins,
+      });
+      known[marketplace] = {
+        source: { source: "git", url: `https://github.com/example/${marketplace}.git` },
+        installLocation,
+        lastUpdated: "2026-09-01T00:00:00.000Z",
+      };
+    }
+    await writeJson(join(this.path, "plugins", "known_marketplaces.json"), known);
   }
 
   async enabledPlugins(enabledPlugins: Record<string, boolean>): Promise<this> {

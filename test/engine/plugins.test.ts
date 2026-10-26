@@ -107,4 +107,46 @@ describe("report: Plugin Inventory", () => {
       "mcp-server toolkit:inline",
     ]);
   });
+
+  it("uses the marketplace entry as the manifest when the plugin has no manifest", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("example-bundle@market", {
+      manifest: null,
+      marketplaceEntry: {
+        skills: ["./skill-a", "./skill-b"],
+        mcpServers: { docs: { type: "http", url: "https://docs.example.com/mcp" } },
+      },
+      files: {
+        "skill-a/SKILL.md": "---\nname: skill-a\n---\n",
+        "skill-b/SKILL.md": "---\nname: skill-b\n---\n",
+        "README.md": "Raw files only.",
+      },
+    });
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
+      "skill example-bundle:skill-a",
+      "skill example-bundle:skill-b",
+      "mcp-server example-bundle:docs",
+    ]);
+  });
+
+  it("uses a non-strict marketplace entry as the manifest even when a manifest exists", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("curated@market", {
+      manifest: { name: "curated", agents: ["./agents/author-choice.md"] },
+      marketplaceEntry: { strict: false, agents: ["./agents/curated-choice.md"] },
+      files: {
+        "agents/author-choice.md": "---\nname: author-choice\n---\n",
+        "agents/curated-choice.md": "---\nname: curated-choice\n---\n",
+      },
+    });
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
+      "agent curated:curated-choice",
+    ]);
+  });
 });
