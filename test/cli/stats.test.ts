@@ -52,6 +52,29 @@ describe("declaw stats", () => {
     });
   });
 
+  it("reads the default config directory under home when CLAUDE_CONFIG_DIR is unset", async () => {
+    const config = await exampleConfig();
+
+    const { stdout } = await runCli(["stats", "--json"], {}, dirname(config.path));
+
+    expect(JSON.parse(stdout).installations).toHaveLength(2);
+  });
+
+  it("honours CLAUDE_CONFIG_DIR over the default under home", async () => {
+    const config = await exampleConfig();
+    const elsewhere = await fakeConfigDir();
+    await elsewhere.standaloneSkill("only-in-default");
+
+    const { stdout } = await runCli(
+      ["stats", "--json"],
+      { CLAUDE_CONFIG_DIR: config.path },
+      dirname(elsewhere.path),
+    );
+
+    const names = JSON.parse(stdout).installations.map((i: { name: string }) => i.name);
+    expect(names).toEqual(["linear-ticket", "ux-writing"]);
+  });
+
   it("prints each skill with its Uses and last Use, under the covered period", async () => {
     const config = await exampleConfig();
 
