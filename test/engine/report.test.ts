@@ -148,4 +148,26 @@ describe("report: Linked Skills and Synced Skills", () => {
       },
     ]);
   });
+
+  it("labels a skill in the claude.ai-synced area a Synced Skill counted by its qualified name", async () => {
+    const config = await fakeConfigDir();
+    await config.syncedSkill("docx");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("anthropic-skills:docx", "2026-10-03T09:00:00.000Z"),
+      skillToolCall("docx", "2026-10-05T09:00:00.000Z"),
+      skillToolCall("anthropic-skills:docx", "2026-10-07T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "anthropic-skills:docx",
+        uses: 2,
+        lastUse: new Date("2026-10-07T09:00:00.000Z"),
+        synced: true,
+      },
+    ]);
+  });
 });
