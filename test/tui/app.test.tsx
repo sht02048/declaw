@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { report } from "../../src/engine/index.js";
@@ -80,6 +81,63 @@ describe("TUI", () => {
   });
 });
 
+async function cleanupReport() {
+  const config = await fakeConfigDir();
+  await config.plugin("idle@market", { skills: ["nap"] });
+  await config.linkedSkill("find-skills", { target: join(config.home, ".agents", "skills", "find-skills") });
+  await config.standaloneSkill("ux-writing");
+  await config.transcript({ project: "/work/app", session: "s1" }, [
+    userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+  ]);
+  return { config, result: await report({ configDir: config.path, now }) };
+}
+
+describe("TUI confirmation screen", () => {
+  it("lists each selected Installation with its planned action and how to undo it", async () => {
+    const { config, result } = await cleanupReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, "r", ENTER);
+
+    const target = join(config.home, ".agents", "skills", "find-skills");
+    const frame = unwrapped(lastFrame()!);
+    expect(frame).toContain(
+      "idle@market Uninstall with claude plugin uninstall idle@market --scope user " +
+        "Undo: claude plugin install idle@market --scope user",
+    );
+    expect(frame).toContain(
+      `find-skills Remove the link only, keeping ${target} ` +
+        `Undo: ln -s ${target} ${join(config.path, "skills", "find-skills")}`,
+    );
+    expect(frame).toContain(
+      `ux-writing Move ${join(config.path, "skills", "ux-writing")} to the system trash ` +
+        "Undo: restore it from the system trash",
+    );
+    expect(frame).not.toContain("[x]");
+  });
+
+  it("goes back to the list with the selection unchanged", async () => {
+    const { config, result } = await cleanupReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, "r", DOWN, " ", ENTER, ESCAPE);
+
+    expect(selected(lastFrame()!)).toEqual(["idle@market", "ux-writing"]);
+  });
+
+  it("offers no way past the confirmation screen in a dry run", async () => {
+    const { config, result } = await cleanupReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun />);
+
+    await press(stdin, "r", ENTER, ENTER, "y");
+
+    expect(lastFrame()).toContain("Dry run: nothing will be changed");
+    expect(lastFrame()).toContain("Undo: restore it from the system trash");
+  });
+});
+
+const ENTER = "\r";
+const ESCAPE = "\u001B";
 const DOWN = "\u001B[B";
 const RIGHT = "\u001B[C";
 const LEFT = "\u001B[D";
@@ -87,13 +145,17 @@ const LEFT = "\u001B[D";
 async function press(stdin: { write: (data: string) => void }, ...keys: string[]) {
   for (const key of keys) {
     stdin.write(key);
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, key === ESCAPE ? 50 : 0));
   }
+}
+
+function unwrapped(frame: string): string {
+  return frame.replace(/\s+/g, " ");
 }
 
 function selected(frame: string): string[] {
   return frame
     .split("\n")
     .filter((line) => line.includes("[x]"))
-    .map((line) => line.match(/\S+@\S+|anthropic-skills:\S+|ux-writing/)![0]);
+    .map((line) => line.match(/\S+@\S+|anthropic-skills:\S+|ux-writing|find-skills/)![0]);
 }
