@@ -248,6 +248,16 @@ describe("TUI confirmation screen", () => {
     expect(lastFrame()).toContain("Review the Cleanup of 3 Installations");
   });
 
+  it("asks for a selection when reviewing with nothing selected", async () => {
+    const { config, result } = await cleanupReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun />);
+
+    await press(stdin, ENTER);
+
+    expect(lastFrame()).toContain("Select at least one Installation to review.");
+    expect(lastFrame()).toContain("idle@market");
+  });
+
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);

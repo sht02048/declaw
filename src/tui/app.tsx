@@ -62,6 +62,9 @@ export function App({ report, configDir, dryRun }: AppProps) {
       ? [
           { key: "gap", text: "" },
           { key: "legend", text: "* recommended for Cleanup", style: "dim" },
+          ...(state.needsSelection
+            ? [{ key: "hint", text: "Select at least one Installation to review.", style: "warning" as const }]
+            : []),
           { key: "keys", text: LIST_KEYS, style: "dim" },
         ]
       : [
@@ -129,6 +132,7 @@ interface State {
   screen: Screen;
   cursor: number;
   confirmTop: number;
+  needsSelection: boolean;
   selection: ReadonlySet<string>;
   expanded: ReadonlySet<string>;
 }
@@ -146,6 +150,7 @@ const INITIAL_STATE: State = {
   screen: "list",
   cursor: 0,
   confirmTop: 0,
+  needsSelection: false,
   selection: new Set(),
   expanded: new Set(),
 };
@@ -186,18 +191,22 @@ function reducerFor(installations: Installation[]) {
         if (!current || !isRemovable(current)) return state;
         return {
           ...state,
+          needsSelection: false,
           selection: withName(state.selection, current.name, !state.selection.has(current.name)),
         };
       case "select-recommended":
         return {
           ...state,
+          needsSelection: false,
           selection: new Set([
             ...state.selection,
             ...installations.filter((i) => i.recommended).map((i) => i.name),
           ]),
         };
       case "review":
-        return state.selection.size === 0 ? state : { ...state, screen: "confirm", confirmTop: 0 };
+        return state.selection.size === 0
+          ? { ...state, needsSelection: true }
+          : { ...state, screen: "confirm", confirmTop: 0 };
       case "back":
         return state;
     }
