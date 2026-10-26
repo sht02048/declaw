@@ -23,7 +23,7 @@ A skill the user installed directly, outside any Plugin.
 _Avoid_: user skill, loose skill, local skill
 
 **Linked Skill**:
-A Standalone Skill whose files belong to somewhere else, such as another tool's skill folder or a personal repository. Removing it removes only the link.
+A Standalone Skill whose files belong to somewhere else, such as another tool's skill folder or a personal repository. Removing it removes only the link. A link whose target no longer exists is still a Linked Skill.
 _Avoid_: symlinked skill, external skill
 
 **Synced Skill**:
@@ -48,13 +48,25 @@ _Avoid_: stat, state, metrics, telemetry
 Whether an Installation is installed and whether it is enabled, plus facts that affect the user's judgement, such as how many hooks a Plugin runs every session.
 _Avoid_: state, stat
 
+**Usage Status**:
+Which one of Used, Unused, Too New, or Unknown an Installation is, judged from its Usage Stats. Distinct from Install Status.
+_Avoid_: status, state, verdict
+
+**Used**:
+Having a known Use: one during the period the Usage Stats cover, or an older last Use that Claude Code still remembers.
+_Avoid_: active, alive
+
 **Unused**:
-Having no Use during the period the Usage Stats cover.
+Having no known Use at all: none during the period the Usage Stats cover, and no older last Use.
 _Avoid_: useless, dead, stale
 
 **Too New**:
-Installed more recently than the start of the period the Usage Stats cover, so there is not enough history to call it Unused.
+Installed more recently than the start of the period the Usage Stats cover, or with no period at all, so there is not enough history to call it Unused.
 _Avoid_: recent, fresh, new
+
+**Unknown**:
+The Usage Status of an Installation whose last Use cannot be known because a data source it depends on is unreadable. It is never called Unused.
+_Avoid_: unreadable, missing
 
 ### What the user does
 

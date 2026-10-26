@@ -1,0 +1,45 @@
+{
+  "name": "declaw",
+  "version": "0.0.0",
+  "description": "See which Claude Code plugins and skills you actually use, and clean up the rest.",
+  "license": "MIT",
+  "author": "Minsug Chae",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sht02048/declaw.git"
+  },
+  "type": "module",
+  "bin": {
+    "declaw": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.3.1",
+    "trash": "^10.1.1",
+    "wrap-ansi": "^10.0.2"
+  }
+}
