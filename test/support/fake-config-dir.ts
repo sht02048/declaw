@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { onTestFinished } from "vitest";
@@ -10,8 +10,15 @@ export interface TranscriptLocation {
   session: string;
 }
 
+export interface FakeConfigDirOptions {
+  configFileInConfigDir?: boolean;
+}
+
 export class FakeConfigDir {
-  constructor(readonly path: string) {}
+  constructor(
+    readonly path: string,
+    readonly configFile: string,
+  ) {}
 
   async standaloneSkill(name: string): Promise<this> {
     await writeSkillFolder(join(this.path, "skills", name), name);
@@ -33,6 +40,16 @@ export class FakeConfigDir {
     return this;
   }
 
+  async skillUsage(skill: string, lastUsedAt: string, usageCount = 1): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    config.skillUsage = {
+      ...config.skillUsage,
+      [skill]: { usageCount, lastUsedAt: new Date(lastUsedAt).getTime() },
+    };
+    await writeFile(this.configFile, JSON.stringify(config));
+    return this;
+  }
+
   async transcript(
     { project, session }: TranscriptLocation,
     lines: TranscriptLine[],
@@ -45,13 +62,22 @@ export class FakeConfigDir {
   }
 }
 
-export async function fakeConfigDir(): Promise<FakeConfigDir> {
+export async function fakeConfigDir(options: FakeConfigDirOptions = {}): Promise<FakeConfigDir> {
   const root = await mkdtemp(join(tmpdir(), "declaw-"));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   const path = join(root, ".claude");
   await mkdir(path);
-  return new FakeConfigDir(path);
+  const configFile = join(options.configFileInConfigDir ? path : root, ".claude.json");
+  await writeFile(configFile, JSON.stringify(SENSITIVE_CONFIG_FILE_KEYS));
+  return new FakeConfigDir(path, configFile);
 }
+
+export const SENSITIVE_CONFIG_FILE_KEYS = {
+  oauthAccount: { accountUuid: "fake-account-uuid", emailAddress: "fake@example.com" },
+  userID: "fake-user-id",
+  machineID: "fake-machine-id",
+  mcpServers: { secret: { type: "http", url: "https://fake.example.com/mcp?token=fake-token" } },
+};
 
 async function writeSkillFolder(dir: string, name: string): Promise<void> {
   await mkdir(dir, { recursive: true });

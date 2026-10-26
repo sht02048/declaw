@@ -1,9 +1,12 @@
+import { dirname, join } from "node:path";
 import { findStandaloneSkills } from "./inventory.js";
+import { readSkillLastUses } from "./skill-usage.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
 export interface ReportOptions {
   configDir: string;
+  configFile?: string;
   now: Date;
 }
 
@@ -26,7 +29,11 @@ export interface Report {
   installations: Installation[];
 }
 
-export async function report({ configDir, now }: ReportOptions): Promise<Report> {
+export async function report({
+  configDir,
+  configFile = join(dirname(configDir), ".claude.json"),
+  now,
+}: ReportOptions): Promise<Report> {
   const skills = await findStandaloneSkills(configDir);
   const usage = new Map<string, { uses: number; lastUse: Date | null }>();
   for (const skill of skills) usage.set(skill.name, { uses: 0, lastUse: null });
@@ -43,6 +50,12 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
         if (stats.lastUse === null || use.at > stats.lastUse) stats.lastUse = use.at;
       }
     }
+  }
+
+  const skillLastUses = await readSkillLastUses(configFile);
+  for (const [name, stats] of usage) {
+    const counted = skillLastUses.get(name);
+    if (counted && (stats.lastUse === null || counted > stats.lastUse)) stats.lastUse = counted;
   }
 
   return {

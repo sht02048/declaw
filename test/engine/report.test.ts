@@ -117,3 +117,54 @@ describe("report: Standalone Skill Usage Stats", () => {
     });
   });
 });
+
+describe("report: skill history from the per-skill counter", () => {
+  it("shows the counter's last Use with zero in-period Uses for a skill absent from transcripts", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.skillUsage("orca-linear", "2026-08-14T12:00:00.000Z", 30);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "orca-linear",
+        uses: 0,
+        lastUse: new Date("2026-08-14T12:00:00.000Z"),
+      },
+    ]);
+  });
+
+  it("shows the later last Use when both transcripts and the counter have one", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.standaloneSkill("ux-writing");
+    await config.skillUsage("linear-ticket", "2026-10-20T08:00:00.000Z", 12);
+    await config.skillUsage("ux-writing", "2026-07-01T08:00:00.000Z", 4);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
+      skillToolCall("ux-writing", "2026-10-11T10:30:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "linear-ticket",
+        uses: 1,
+        lastUse: new Date("2026-10-20T08:00:00.000Z"),
+      },
+      {
+        kind: "standalone-skill",
+        name: "ux-writing",
+        uses: 1,
+        lastUse: new Date("2026-10-11T10:30:00.000Z"),
+      },
+    ]);
+  });
+});
