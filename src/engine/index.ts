@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import { findStandaloneSkills } from "./inventory.js";
+import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus } from "./read-status.js";
 import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
@@ -29,7 +30,24 @@ export interface StandaloneSkill {
   synced?: true;
 }
 
-export type Installation = StandaloneSkill;
+export interface Component {
+  kind: ComponentKind;
+  name: string;
+  uses: number | Unknown;
+  lastUse: Date | null | Unknown;
+}
+
+export interface Plugin {
+  kind: "plugin";
+  name: string;
+  enabled: boolean;
+  hooks: number;
+  uses: number | Unknown;
+  lastUse: Date | null | Unknown;
+  components: Component[];
+}
+
+export type Installation = Plugin | StandaloneSkill;
 
 export interface DataSources {
   transcripts: ReadStatus;
@@ -42,36 +60,98 @@ export interface Report {
   installations: Installation[];
 }
 
+type Usage = Pick<StandaloneSkill, "uses" | "lastUse">;
+
+const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
+
 export async function report({
   configDir,
   configFile = join(dirname(configDir), ".claude.json"),
   now,
 }: ReportOptions): Promise<Report> {
+  const plugins = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
-  const transcripts = await readTranscriptUsage(configDir, new Set(skills.map((skill) => skill.name)));
+  const skillToolNames = new Set(skills.map((skill) => skill.name));
+  for (const plugin of plugins) {
+    for (const component of plugin.components) {
+      if (SKILL_TOOL_KINDS.has(component.kind)) skillToolNames.add(component.name);
+    }
+  }
+  const transcripts = await readTranscriptUsage(configDir, skillToolNames);
   const counter = await readSkillUsageCounter(configFile);
+
+  const usageOf = (name: string, extendedByCounter: boolean): Usage => {
+    const inPeriod = transcripts.usage === null ? null : (transcripts.usage.get(name) ?? NO_USE);
+    if (extendedByCounter) {
+      return { uses: inPeriod?.uses ?? "unknown", lastUse: lastUseOf(name, inPeriod, counter) };
+    }
+    return inPeriod ?? { uses: "unknown", lastUse: "unknown" };
+  };
 
   return {
     period: { start: transcripts.start, end: now },
     sources: { transcripts: transcripts.status, skillUsageCounter: counter.status },
-    installations: skills.map((skill) => {
-      const inPeriod = transcripts.usage?.get(skill.name) ?? null;
-      return {
+    installations: [
+      ...plugins.map((plugin) => pluginInstallation(plugin, usageOf, transcripts)),
+      ...skills.map((skill): StandaloneSkill => ({
         kind: "standalone-skill",
         name: skill.name,
-        uses: inPeriod?.uses ?? "unknown",
-        lastUse: lastUseOf(skill.name, inPeriod, counter),
+        ...usageOf(skill.name, true),
         ...(skill.linked && { linked: skill.linked }),
         ...(skill.synced && { synced: skill.synced }),
-      };
-    }),
+      })),
+    ],
   };
+}
+
+function pluginInstallation(
+  plugin: PluginEntry,
+  usageOf: (name: string, extendedByCounter: boolean) => Usage,
+  transcripts: TranscriptUsage,
+): Plugin {
+  const components = plugin.components.map(
+    (component): Component => ({
+      ...component,
+      ...usageOf(component.name, SKILL_TOOL_KINDS.has(component.kind)),
+    }),
+  );
+  let uses: number | Unknown = transcripts.usage === null ? "unknown" : 0;
+  for (const component of components) {
+    uses = uses === "unknown" || component.uses === "unknown" ? "unknown" : uses + component.uses;
+  }
+  return {
+    kind: "plugin",
+    name: plugin.key,
+    enabled: plugin.enabled,
+    hooks: plugin.hooks,
+    uses,
+    lastUse: latestLastUse(
+      components.map((component) => component.lastUse),
+      transcripts.start,
+    ),
+    components,
+  };
+}
+
+// An unknown last Use is never inside the covered period, since readable transcripts would have
+// shown it, so it can only be ignored next to a known last Use that falls inside the period.
+function latestLastUse(lastUses: Usage["lastUse"][], periodStart: Date | null): Usage["lastUse"] {
+  let latest: Date | null = null;
+  let anyUnknown = false;
+  for (const lastUse of lastUses) {
+    if (lastUse === "unknown") anyUnknown = true;
+    else latest = later(latest, lastUse);
+  }
+  if (!anyUnknown) return latest;
+  return latest !== null && periodStart !== null && latest >= periodStart ? latest : "unknown";
 }
 
 interface InPeriodUsage {
   uses: number;
   lastUse: Date | null;
 }
+
+const NO_USE: InPeriodUsage = { uses: 0, lastUse: null };
 
 interface TranscriptUsage {
   status: ReadStatus;

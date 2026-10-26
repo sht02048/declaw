@@ -4,7 +4,7 @@ See which Claude Code plugins and skills you actually use, so you can remove the
 
 declaw reads Claude Code's local files and reports Usage Stats for each Installation in User Scope: how many Uses it had in the period your transcripts cover, and when it was last used. It never changes anything while reporting.
 
-Status: early development. Only Standalone Skills are reported so far.
+Status: early development. Plugins and Standalone Skills are reported; for Plugins, only Skill tool calls count as Uses so far.
 
 ## Usage
 
