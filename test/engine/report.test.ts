@@ -230,12 +230,20 @@ describe("report: skill history from the per-skill counter", () => {
 
   it("never takes a last Use or Use count from the per-plugin counter", async () => {
     const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit"] });
     await config.standaloneSkill("linear-ticket");
+    await config.pluginUsage("skills@sht02048-skills", "2026-10-20T08:00:00.000Z", 95);
     await config.pluginUsage("linear-ticket", "2026-10-20T08:00:00.000Z", 95);
 
     const result = await report({ configDir: config.path, now });
 
-    expect(result.installations).toEqual([
+    expect(result.installations).toMatchObject([
+      {
+        name: "skills@sht02048-skills",
+        uses: 0,
+        lastUse: null,
+        components: [{ name: "skills:commit", uses: 0, lastUse: null }],
+      },
       { kind: "standalone-skill", name: "linear-ticket", uses: 0, lastUse: null },
     ]);
   });
