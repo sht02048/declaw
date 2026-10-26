@@ -92,6 +92,31 @@ describe("TUI", () => {
   });
 });
 
+describe("TUI hook counts", () => {
+  it("shows how many hooks each Plugin runs every session, in its row and when expanded", async () => {
+    const config = await fakeConfigDir();
+    const hook = { type: "command", command: "true" };
+    await config.plugin("hooked@market", {
+      skills: ["work"],
+      hooks: { SessionStart: [{ hooks: [hook, hook] }] },
+    });
+    await config.plugin("quiet@market", { skills: ["nap"] });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ ...config.paths, now });
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+
+    const row = (name: string) => lastFrame()!.split("\n").find((line) => line.includes(name));
+    expect(row("hooked@market")).toMatch(/\s2 hooks(\s|$)/);
+    expect(row("quiet@market")).toMatch(/\s0 hooks(\s|$)/);
+
+    await press(stdin, RIGHT);
+
+    expect(lastFrame()).toContain("2 hooks run every session");
+  });
+});
+
 describe("TUI in a short terminal", () => {
   it("keeps the covered period at the top while scrolling through a long list", async () => {
     const config = await fakeConfigDir();

@@ -11,6 +11,8 @@ import {
   type Report,
 } from "../engine/index.js";
 import {
+  formatHookCount,
+  formatHooksPerSession,
   formatLastUse,
   formatPeriod,
   formatSources,
@@ -186,7 +188,7 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
         if (!current) return state;
         const expanded = withName(state.expanded, current.name, action.open);
         const row = entriesOf(installations, expanded).findIndex(
-          (entry) => installations[entry.index] === current && entry.component === undefined,
+          (entry) => installations[entry.index] === current && !isChild(entry),
         );
         return { ...state, expanded, cursor: row };
       }
@@ -234,14 +236,23 @@ interface Body {
 interface Entry {
   index: number;
   component?: number;
+  hooks?: true;
 }
 
 function entriesOf(installations: Installation[], expanded: ReadonlySet<string>): Entry[] {
   return installations.flatMap((installation, index): Entry[] => {
     if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
     const count = Math.max(1, installation.components.length);
-    return [{ index }, ...Array.from({ length: count }, (_, component) => ({ index, component }))];
+    return [
+      { index },
+      ...Array.from({ length: count }, (_, component) => ({ index, component })),
+      { index, hooks: true },
+    ];
   });
+}
+
+function isChild(entry: Entry | undefined): boolean {
+  return entry?.component !== undefined || entry?.hooks === true;
 }
 
 function listLines(
@@ -263,6 +274,13 @@ function listLines(
     const onCursor = line === cursor;
     const marker = onCursor ? ">" : " ";
     const style = onCursor ? { style: "cursor" as const } : { style: "dim" as const };
+    if (entry.hooks && installation.kind === "plugin") {
+      return {
+        key: `${installation.name} hooks`,
+        text: `${marker}       ${formatHooksPerSession(installation.hooks)}`,
+        ...style,
+      };
+    }
     if (entry.component !== undefined) {
       const component = installation.kind === "plugin" ? installation.components[entry.component] : undefined;
       const text = component
@@ -287,8 +305,8 @@ function listLines(
     };
   });
   let focusEnd = cursor;
-  if (entries[cursor]?.component === undefined) {
-    while (entries[focusEnd + 1]?.component !== undefined) focusEnd += 1;
+  if (!isChild(entries[cursor])) {
+    while (isChild(entries[focusEnd + 1])) focusEnd += 1;
   }
   return { lines, focus: cursor, focusEnd };
 }
@@ -304,7 +322,9 @@ function installationCells(installation: Installation): string[] {
     installation.name,
     String(installation.uses),
     formatLastUse(installation.lastUse),
-    note(installation),
+    installation.kind === "plugin"
+      ? [formatHookCount(installation.hooks), note(installation)].filter(Boolean).join(", ")
+      : note(installation),
   ];
 }
 

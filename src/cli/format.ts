@@ -1,4 +1,5 @@
-import type { CoveredPeriod, DataSources, Installation, ReadStatus, Status } from "../engine/index.js";
+import type { CoveredPeriod, DataSources, Installation, ReadStatus, Status, Unknown } from "../engine/index.js";
+import { plural } from "../plural.js";
 
 export const SOURCE_LABELS: Record<keyof DataSources, string> = {
   installRecords: "Install records",
@@ -58,4 +59,13 @@ export function formatLastUse(lastUse: Installation["lastUse"]): string {
 
 export function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+export function formatHookCount(hooks: number | Unknown): string {
+  return hooks === "unknown" ? "hooks unknown" : `${hooks} ${plural(hooks, "hook")}`;
+}
+
+export function formatHooksPerSession(hooks: number | Unknown): string {
+  if (hooks === "unknown") return "hooks run every session: unknown";
+  return `${formatHookCount(hooks)} ${hooks === 1 ? "runs" : "run"} every session`;
 }
