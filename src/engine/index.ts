@@ -1,7 +1,7 @@
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
-import { statusOf, type Status } from "./statuses.js";
+import { judge, type Status } from "./statuses.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
 export type { Status } from "./statuses.js";
@@ -26,6 +26,7 @@ export interface StandaloneSkill {
   name: string;
   installedAt: Date | null;
   status: Status;
+  recommended: boolean;
   uses: number;
   lastUse: Date | null;
   linked?: { target: string };
@@ -44,6 +45,7 @@ export interface Plugin {
   name: string;
   installedAt: Date | null;
   status: Status;
+  recommended: boolean;
   enabled: boolean;
   hooks: number;
   uses: number;
@@ -86,9 +88,9 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   return {
     period: { start, end: now },
     installations: [
-      ...plugins.map((plugin) => judged(pluginInstallation(plugin, usage), start)),
+      ...plugins.map((plugin) => judge(pluginInstallation(plugin, usage), start)),
       ...skills.map((skill) =>
-        judged(
+        judge(
           {
             kind: "standalone-skill" as const,
             name: skill.name,
@@ -104,19 +106,12 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   };
 }
 
-function judged<T extends Omit<Installation, "status">>(
-  installation: T,
-  periodStart: Date | null,
-): T & { status: Status } {
-  return { ...installation, status: statusOf(installation, periodStart) };
-}
-
 const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
 
 function pluginInstallation(
   plugin: PluginEntry,
   usage: Map<string, UsageTally>,
-): Omit<Plugin, "status"> {
+): Omit<Plugin, "status" | "recommended"> {
   const components = plugin.components.map(
     (component): Component => ({
       ...component,

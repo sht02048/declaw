@@ -92,3 +92,71 @@ describe("report: Statuses", () => {
     });
   });
 });
+
+function recommended(result: Report): string[] {
+  return result.installations.filter((i) => i.recommended).map((i) => i.name);
+}
+
+describe("report: the recommended Cleanup set", () => {
+  it("recommends Unused Installations and leaves Used ones out", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("idle@market", { skills: ["nap"] });
+    await config.plugin("busy@market", { skills: ["work"] });
+    await config.standaloneSkill("ux-writing");
+    await config.linkedSkill("find-skills");
+    await config.standaloneSkill("linear-ticket");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+      skillToolCall("busy:work", "2026-10-02T09:00:00.000Z"),
+      skillToolCall("linear-ticket", "2026-10-03T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(recommended(result).sort()).toEqual(["find-skills", "idle@market", "ux-writing"]);
+  });
+
+  it("recommends a disabled Plugin even when it saw a Use", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("switched-off@market", { skills: ["work"] });
+    await config.enabledPlugins({ "switched-off@market": false });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+      skillToolCall("switched-off:work", "2026-10-02T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(recommended(result)).toEqual(["switched-off@market"]);
+  });
+
+  it("never recommends a Too New Installation, even an Unused or disabled one", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("fresh@market", { installedAt: "2026-10-20T00:00:00.000Z" });
+    await config.plugin("fresh-off@market", { installedAt: "2026-10-20T00:00:00.000Z" });
+    await config.enabledPlugins({ "fresh-off@market": false });
+    await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
+    await config.linkedSkill("fresh-link", { createdAt: "2026-10-20T00:00:00.000Z" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(recommended(result)).toEqual([]);
+  });
+
+  it("never recommends a Synced Skill, even an Unused one", async () => {
+    const config = await fakeConfigDir();
+    await config.syncedSkill("docx");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "anthropic-skills:docx", status: "unused", recommended: false },
+    ]);
+  });
+});
