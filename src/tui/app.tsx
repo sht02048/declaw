@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
-import { useRef, useState } from "react";
+import { useReducer, useRef } from "react";
 import {
   isRemovable,
   planCleanup,
@@ -31,41 +31,18 @@ interface Line {
 }
 
 const LIST_KEYS =
-  "up/down move · space select · r select recommended · right/left expand · enter review · q quit";
+  "up/down move · space select · r recommended · right/left expand · enter review · q quit";
 const CONFIRM_KEYS = "up/down scroll · esc back to the list · q quit";
 
 export function App({ report, configDir, dryRun }: AppProps) {
   const { installations } = report;
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
-  const [screen, setScreen] = useState<Screen>("list");
-  const [cursor, setCursor] = useState(0);
-  const [confirmTop, setConfirmTop] = useState(0);
-  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [state, dispatch] = useReducer(reducerFor(installations), INITIAL_STATE);
+  const { screen, cursor, confirmTop, selection, expanded } = state;
   const listTop = useRef(0);
 
   const selected = installations.filter((installation) => selection.has(installation.name));
-
-  const toggle = (installation: Installation) => {
-    if (!isRemovable(installation)) return;
-    setSelection((current) => {
-      const next = new Set(current);
-      if (!next.delete(installation.name)) next.add(installation.name);
-      return next;
-    });
-  };
-
-  const setExpandedAtCursor = (open: boolean) => {
-    const name = installations[cursor]?.name;
-    if (name === undefined) return;
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (open) next.add(name);
-      else next.delete(name);
-      return next;
-    });
-  };
 
   const header: Line[] = [
     { key: "period", text: formatPeriod(report.period), style: "bold" },
@@ -105,29 +82,20 @@ export function App({ report, configDir, dryRun }: AppProps) {
   const view = windowFrom(heights, top, room);
 
   useInput((input, key) => {
-    if (input === "q") {
-      exit();
-      return;
-    }
-    if (screen === "confirm") {
-      if (key.escape) setScreen("list");
-      else if (key.upArrow) setConfirmTop(Math.max(0, top - 1));
-      else if (key.downArrow) setConfirmTop(Math.min(lastTop(heights, room), top + 1));
-      return;
-    }
-    if (key.upArrow) setCursor((current) => Math.max(0, current - 1));
-    else if (key.downArrow) setCursor((current) => Math.min(installations.length - 1, current + 1));
-    else if (key.rightArrow) setExpandedAtCursor(true);
-    else if (key.leftArrow) setExpandedAtCursor(false);
-    else if (input === " " && installations[cursor]) toggle(installations[cursor]);
-    else if (input === "r") {
-      setSelection(
-        (current) =>
-          new Set([...current, ...installations.filter((i) => i.recommended).map((i) => i.name)]),
-      );
-    } else if (key.return && selected.length > 0) {
-      setConfirmTop(0);
-      setScreen("confirm");
+    if (key.escape) dispatch({ type: "back" });
+    else if (key.upArrow) dispatch({ type: "up" });
+    else if (key.downArrow) dispatch({ type: "down", lastConfirmTop: lastTop(heights, room) });
+    else if (key.rightArrow) dispatch({ type: "expand", open: true });
+    else if (key.leftArrow) dispatch({ type: "expand", open: false });
+    else if (key.return) dispatch({ type: "review" });
+    // Keys typed faster than a render arrive as one chunk, such as "r\r".
+    else if (!key.ctrl && !key.meta) {
+      for (const character of input) {
+        if (character === "q") exit();
+        else if (character === " ") dispatch({ type: "toggle" });
+        else if (character === "r") dispatch({ type: "select-recommended" });
+        else if (character === "\r") dispatch({ type: "review" });
+      }
     }
   });
 
@@ -152,6 +120,83 @@ export function App({ report, configDir, dryRun }: AppProps) {
       ))}
     </Box>
   );
+}
+
+interface State {
+  screen: Screen;
+  cursor: number;
+  confirmTop: number;
+  selection: ReadonlySet<string>;
+  expanded: ReadonlySet<string>;
+}
+
+type Action =
+  | { type: "up" }
+  | { type: "down"; lastConfirmTop: number }
+  | { type: "expand"; open: boolean }
+  | { type: "toggle" }
+  | { type: "select-recommended" }
+  | { type: "review" }
+  | { type: "back" };
+
+const INITIAL_STATE: State = {
+  screen: "list",
+  cursor: 0,
+  confirmTop: 0,
+  selection: new Set(),
+  expanded: new Set(),
+};
+
+function reducerFor(installations: Installation[]) {
+  return (state: State, action: Action): State => {
+    if (state.screen === "confirm") {
+      switch (action.type) {
+        case "back":
+          return { ...state, screen: "list" };
+        case "up":
+          return { ...state, confirmTop: Math.max(0, state.confirmTop - 1) };
+        case "down":
+          return { ...state, confirmTop: Math.min(action.lastConfirmTop, state.confirmTop + 1) };
+        default:
+          return state;
+      }
+    }
+    const current = installations[state.cursor];
+    switch (action.type) {
+      case "up":
+        return { ...state, cursor: Math.max(0, state.cursor - 1) };
+      case "down":
+        return { ...state, cursor: Math.min(installations.length - 1, state.cursor + 1) };
+      case "expand":
+        if (!current) return state;
+        return { ...state, expanded: withName(state.expanded, current.name, action.open) };
+      case "toggle":
+        if (!current || !isRemovable(current)) return state;
+        return {
+          ...state,
+          selection: withName(state.selection, current.name, !state.selection.has(current.name)),
+        };
+      case "select-recommended":
+        return {
+          ...state,
+          selection: new Set([
+            ...state.selection,
+            ...installations.filter((i) => i.recommended).map((i) => i.name),
+          ]),
+        };
+      case "review":
+        return state.selection.size === 0 ? state : { ...state, screen: "confirm", confirmTop: 0 };
+      case "back":
+        return state;
+    }
+  };
+}
+
+function withName(names: ReadonlySet<string>, name: string, present: boolean): ReadonlySet<string> {
+  const next = new Set(names);
+  if (present) next.add(name);
+  else next.delete(name);
+  return next;
 }
 
 interface Body {

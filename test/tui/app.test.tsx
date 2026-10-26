@@ -171,6 +171,15 @@ describe("TUI confirmation screen", () => {
     expect(frame).not.toContain("[x]");
   });
 
+  it("reviews a selection made in the same burst of keys", async () => {
+    const { config, result } = await cleanupReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    await press(stdin, `r${ENTER}`);
+
+    expect(lastFrame()).toContain("Review the Cleanup of 3 Installations");
+  });
+
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
