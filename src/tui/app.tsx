@@ -10,7 +10,10 @@ import {
   type PlannedAction,
   type Report,
 } from "../engine/index.js";
+import { actionText } from "../cli/actions.js";
 import {
+  alignRow,
+  columnWidths,
   formatHookCount,
   formatHooksPerSession,
   formatLastUse,
@@ -21,6 +24,7 @@ import {
   USAGE_STATUS_LABELS,
 } from "../cli/format.js";
 import { formatCleanupSummary } from "../cli/summary.js";
+import { countOf } from "../plural.js";
 
 export interface AppProps {
   report: Report;
@@ -340,7 +344,7 @@ function bodyOf(
     case "confirm":
       return confirmLines(plan(), dryRun);
     case "running":
-      return { lines: [{ key: "running", text: `Cleaning up ${count(state.selection.size)}...` }], focus: 0 };
+      return { lines: [{ key: "running", text: `Cleaning up ${countOf(state.selection.size, "Installation")}...` }], focus: 0 };
     case "summary":
       return summaryLines(state.outcomes);
   }
@@ -373,10 +377,6 @@ function footerOf(state: State, dryRun: boolean): Line[] {
   }
 }
 
-function count(installations: number): string {
-  return `${installations} ${installations === 1 ? "Installation" : "Installations"}`;
-}
-
 function summaryLines(outcomes: CleanupOutcome[]): Body {
   const lines = formatCleanupSummary(outcomes)
     .replace(/\n$/, "")
@@ -388,39 +388,18 @@ function summaryLines(outcomes: CleanupOutcome[]): Body {
 function confirmLines(plan: PlannedAction[], dryRun: boolean): Body {
   const title = dryRun ? "Dry run of the Cleanup of" : "Review the Cleanup of";
   const lines: Line[] = [
-    { key: "title", text: `${title} ${count(plan.length)}:` },
+    { key: "title", text: `${title} ${countOf(plan.length, "Installation")}:` },
   ];
   for (const action of plan) {
+    const { describe, undo } = actionText(action);
     lines.push(
       { key: `${action.name} gap`, text: "" },
       { key: action.name, text: action.name, style: "bold" },
-      { key: `${action.name} action`, text: `  ${describe(action)}` },
-      { key: `${action.name} undo`, text: `  Undo: ${undo(action)}`, style: "dim" },
+      { key: `${action.name} action`, text: `  ${describe}` },
+      { key: `${action.name} undo`, text: `  Undo: ${undo}`, style: "dim" },
     );
   }
   return { lines, focus: 0 };
-}
-
-function describe(action: PlannedAction): string {
-  switch (action.kind) {
-    case "uninstall-plugin":
-      return `Uninstall with claude plugin uninstall ${action.name} --scope ${action.scope}`;
-    case "remove-link":
-      return `Remove the link only, keeping ${action.target}`;
-    case "move-to-trash":
-      return `Move ${action.path} to the system trash`;
-  }
-}
-
-function undo(action: PlannedAction): string {
-  switch (action.kind) {
-    case "uninstall-plugin":
-      return action.reinstallCommand;
-    case "remove-link":
-      return action.relinkCommand;
-    case "move-to-trash":
-      return "restore it from the system trash";
-  }
 }
 
 interface View {
@@ -461,15 +440,4 @@ function lastTop(heights: number[], room: number): number {
   let top = heights.length - 1;
   while (top > 0 && windowFrom(heights, top - 1, room).end === heights.length) top -= 1;
   return top;
-}
-
-function columnWidths(rows: string[][]): number[] {
-  return (rows[0] ?? []).map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
-}
-
-function alignRow(row: string[], widths: number[]): string {
-  return row
-    .map((cell, column) => cell.padEnd(widths[column]!))
-    .join("  ")
-    .trimEnd();
 }

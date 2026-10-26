@@ -1,5 +1,16 @@
 import type { Report } from "../engine/index.js";
-import { formatLastUse, formatPeriod, formatSources, kindLabel, note, USAGE_STATUS_LABELS } from "./format.js";
+import {
+  alignRow,
+  columnWidths,
+  formatLastUse,
+  formatPeriod,
+  formatSources,
+  kindLabel,
+  note,
+  USAGE_STATUS_LABELS,
+} from "./format.js";
+
+const USES_COLUMN = 4;
 
 export function formatStatsJson(report: Report): string {
   return JSON.stringify(report, null, 2) + "\n";
@@ -19,13 +30,8 @@ export function formatStatsText(report: Report): string {
       note(installation),
     ]),
   ];
-  const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
-  const table = rows.map((row) =>
-    row
-      .map((cell, column) => (column === 4 ? cell.padStart(widths[column]!) : cell.padEnd(widths[column]!)))
-      .join("  ")
-      .trimEnd(),
-  );
+  const widths = columnWidths(rows);
+  const table = rows.map((row) => alignRow(row, widths, new Set([USES_COLUMN])));
 
   return [
     formatPeriod(report.period),

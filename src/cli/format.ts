@@ -57,6 +57,17 @@ export function formatLastUse(lastUse: Installation["lastUse"]): string {
   return formatDate(lastUse);
 }
 
+export function columnWidths(rows: string[][]): number[] {
+  return (rows[0] ?? []).map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
+}
+
+export function alignRow(row: string[], widths: number[], rightAligned: ReadonlySet<number> = new Set()): string {
+  return row
+    .map((cell, column) => (rightAligned.has(column) ? cell.padStart(widths[column]!) : cell.padEnd(widths[column]!)))
+    .join("  ")
+    .trimEnd();
+}
+
 export function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
