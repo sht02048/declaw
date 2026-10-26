@@ -241,6 +241,51 @@ describe("report: skill history from the per-skill counter", () => {
   });
 });
 
+describe("report: plugin skill history from the per-skill counter", () => {
+  it("extends a plugin skill's last Use, and its Plugin's, without adding in-period Uses", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit", "pr"] });
+    await config.skillUsage("skills:commit", "2026-08-30T12:00:00.000Z", 35);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("skills:pr", "2026-10-02T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "plugin",
+        name: "skills@sht02048-skills",
+        enabled: true,
+        hooks: 0,
+        uses: 1,
+        lastUse: new Date("2026-10-02T09:00:00.000Z"),
+        components: [
+          {
+            kind: "skill",
+            name: "skills:commit",
+            uses: 0,
+            lastUse: new Date("2026-08-30T12:00:00.000Z"),
+          },
+          { kind: "skill", name: "skills:pr", uses: 1, lastUse: new Date("2026-10-02T09:00:00.000Z") },
+        ],
+      },
+    ]);
+  });
+
+  it("shows a Plugin's last Use from the counter when no Component was used in the period", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit"] });
+    await config.skillUsage("skills:commit", "2026-08-30T12:00:00.000Z", 35);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "skills@sht02048-skills", uses: 0, lastUse: new Date("2026-08-30T12:00:00.000Z") },
+    ]);
+  });
+});
+
 describe("report: read status of each data source", () => {
   it("marks every source readable when all of them parse", async () => {
     const config = await fakeConfigDir();
@@ -451,5 +496,66 @@ describe("report: read status of each data source", () => {
       reason: "install records is not valid JSON",
     });
     expect(result.installations.map((installation) => installation.name)).toEqual(["linear-ticket"]);
+  });
+
+  it("shows a Plugin's Uses as unknown when transcripts cannot be listed", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("oh-my-claudecode@omc", { skills: ["review"], agents: ["executor"] });
+    await writeFile(join(config.path, "projects"), "not a directory");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "plugin",
+        name: "oh-my-claudecode@omc",
+        enabled: true,
+        hooks: 0,
+        uses: "unknown",
+        lastUse: "unknown",
+        components: [
+          { kind: "skill", name: "oh-my-claudecode:review", uses: "unknown", lastUse: "unknown" },
+          { kind: "agent", name: "oh-my-claudecode:executor", uses: "unknown", lastUse: "unknown" },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps a Plugin's in-period last Use when the counter is unreadable", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit", "pr"] });
+    await config.corruptConfigFile();
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("skills:pr", "2026-10-02T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      {
+        name: "skills@sht02048-skills",
+        uses: 1,
+        lastUse: new Date("2026-10-02T09:00:00.000Z"),
+        components: [
+          { name: "skills:commit", uses: 0, lastUse: "unknown" },
+          { name: "skills:pr", uses: 1, lastUse: new Date("2026-10-02T09:00:00.000Z") },
+        ],
+      },
+    ]);
+  });
+
+  it("shows a Plugin's last Use as unknown when only an unreadable counter could know it", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit"] });
+    await config.corruptConfigFile();
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-10-02T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "skills@sht02048-skills", uses: 0, lastUse: "unknown" },
+    ]);
   });
 });
