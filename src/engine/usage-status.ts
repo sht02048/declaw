@@ -9,7 +9,7 @@ interface Judgeable {
   synced?: true;
 }
 
-export function judge<T extends Judgeable>(
+export function withUsageStatus<T extends Judgeable>(
   installation: T,
   periodStart: Date | null,
 ): T & { usageStatus: UsageStatus; recommended: boolean } {

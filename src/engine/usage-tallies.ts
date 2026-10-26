@@ -19,15 +19,15 @@ const USE_KIND_OF: Record<ComponentKind, UseKind> = {
   "mcp-server": "mcp",
 };
 
-export class UsageLedger {
+export class UsageTallies {
   private readonly tallies = new Map<string, UsageTally>();
   private readonly mcpPrefixes: McpServerPrefix[] = [];
 
   constructor(plugins: PluginRecord[], skills: StandaloneSkillRecord[]) {
-    for (const skill of skills) this.open("invoke", skill.name);
+    for (const skill of skills) this.startTally("invoke", skill.name);
     for (const plugin of plugins) {
       for (const component of plugin.components === "unknown" ? [] : plugin.components) {
-        this.open(USE_KIND_OF[component.kind], component.name);
+        this.startTally(USE_KIND_OF[component.kind], component.name);
         if (component.kind === "mcp-server") this.addMcpServer(plugin, component);
       }
     }
@@ -50,7 +50,7 @@ export class UsageLedger {
     return { ...this.tallies.get(key(USE_KIND_OF[component.kind], component.name))! };
   }
 
-  private open(kind: UseKind, name: string): void {
+  private startTally(kind: UseKind, name: string): void {
     if (!this.tallies.has(key(kind, name))) this.tallies.set(key(kind, name), { uses: 0, lastUse: null });
   }
 

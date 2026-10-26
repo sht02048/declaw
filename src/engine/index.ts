@@ -1,10 +1,10 @@
 import { plural } from "../plural.js";
-import { UsageLedger, type UsageTally } from "./attribution.js";
+import { UsageTallies, type UsageTally } from "./usage-tallies.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
 import { lastUseOf, later, readSkillUsageCounter } from "./skill-usage.js";
-import { judge, sortForCleanup, type UsageStatus } from "./usage-status.js";
+import { sortForCleanup, withUsageStatus, type UsageStatus } from "./usage-status.js";
 import { findTranscripts, readTranscript } from "./transcripts.js";
 import { lineTimestamp, usesIn } from "./uses.js";
 
@@ -91,7 +91,7 @@ export async function report({
 }: ReportOptions): Promise<Report> {
   const { installRecords, settings, pluginFiles, plugins } = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
-  const transcripts = await readTranscriptUsage(configDir, new UsageLedger(plugins, skills));
+  const transcripts = await readTranscriptUsage(configDir, new UsageTallies(plugins, skills));
   const counter = await readSkillUsageCounter(configFile);
 
   const usageOf = (inPeriod: UsageTally | null, counterKey: string | null): Usage => {
@@ -112,15 +112,15 @@ export async function report({
     },
     installations: sortForCleanup<Installation>([
       ...plugins.map((plugin) =>
-        judge(pluginInstallation(plugin, usageOf, transcripts), transcripts.start),
+        withUsageStatus(pluginInstallation(plugin, usageOf, transcripts), transcripts.start),
       ),
       ...skills.map((skill) =>
-        judge(
+        withUsageStatus(
           {
             kind: "standalone-skill" as const,
             name: skill.name,
             installedAt: skill.createdAt,
-            ...usageOf(transcripts.ledger?.skill(skill.name) ?? null, skill.name),
+            ...usageOf(transcripts.tallies?.skill(skill.name) ?? null, skill.name),
             ...(skill.linked && { linked: skill.linked }),
             ...(skill.synced && { synced: skill.synced }),
           },
@@ -140,12 +140,12 @@ function pluginInstallation(
     (component): Component => ({
       ...component,
       ...usageOf(
-        transcripts.ledger?.component(component) ?? null,
+        transcripts.tallies?.component(component) ?? null,
         COUNTED_BY_SKILL_USAGE.has(component.kind) ? component.name : null,
       ),
     }),
   );
-  let uses: number | Unknown = transcripts.ledger === null || plugin.components === "unknown" ? "unknown" : 0;
+  let uses: number | Unknown = transcripts.tallies === null || plugin.components === "unknown" ? "unknown" : 0;
   for (const component of components) {
     uses = uses === "unknown" || component.uses === "unknown" ? "unknown" : uses + component.uses;
   }
@@ -183,15 +183,15 @@ function latestLastUse(lastUses: Usage["lastUse"][], periodStart: Date | null): 
 interface TranscriptUsage {
   status: ReadStatus;
   start: Date | null;
-  ledger: UsageLedger | null;
+  tallies: UsageTallies | null;
 }
 
-async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Promise<TranscriptUsage> {
+async function readTranscriptUsage(configDir: string, tallies: UsageTallies): Promise<TranscriptUsage> {
   let files: string[];
   try {
     files = await findTranscripts(configDir);
   } catch {
-    return { status: unreadable("transcripts folder could not be read"), start: null, ledger: null };
+    return { status: unreadable("transcripts folder could not be read"), start: null, tallies: null };
   }
 
   let start: Date | null = null;
@@ -203,7 +203,7 @@ async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Prom
       for await (const line of readTranscript(file, () => skippedLines++)) {
         const at = lineTimestamp(line);
         if (at !== null && (start === null || at < start)) start = at;
-        for (const use of usesIn(line)) ledger.record(use);
+        for (const use of usesIn(line)) tallies.record(use);
       }
     } catch {
       unreadableFiles += 1;
@@ -215,5 +215,5 @@ async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Prom
     unreadableFiles > 0 && `${unreadableFiles} transcript ${plural(unreadableFiles, "file")} could not be read`,
   ].filter((problem) => problem !== false);
   const status = problems.length === 0 ? readable : partiallyReadable(problems.join("; "));
-  return { status, start, ledger };
+  return { status, start, tallies };
 }

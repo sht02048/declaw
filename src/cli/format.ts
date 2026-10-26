@@ -23,7 +23,7 @@ export function kindLabel(installation: Installation): string {
   return "Standalone Skill";
 }
 
-export function note(installation: Installation): string {
+export function installNote(installation: Installation): string {
   if (installation.kind === "plugin") {
     if (installation.enabled === "unknown") return "may be disabled";
     return installation.enabled ? "" : "disabled";

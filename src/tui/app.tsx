@@ -19,8 +19,8 @@ import {
   formatLastUse,
   formatPeriod,
   formatSources,
+  installNote,
   kindLabel,
-  note,
   USAGE_STATUS_LABELS,
 } from "../cli/format.js";
 import { formatCleanupSummary } from "../cli/summary.js";
@@ -327,8 +327,8 @@ function installationCells(installation: Installation): string[] {
     String(installation.uses),
     formatLastUse(installation.lastUse),
     installation.kind === "plugin"
-      ? [formatHookCount(installation.hooks), note(installation)].filter(Boolean).join(", ")
-      : note(installation),
+      ? [formatHookCount(installation.hooks), installNote(installation)].filter(Boolean).join(", ")
+      : installNote(installation),
   ];
 }
 

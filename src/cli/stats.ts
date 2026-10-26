@@ -5,8 +5,8 @@ import {
   formatLastUse,
   formatPeriod,
   formatSources,
+  installNote,
   kindLabel,
-  note,
   USAGE_STATUS_LABELS,
 } from "./format.js";
 
@@ -27,7 +27,7 @@ export function formatStatsText(report: Report): string {
       String(installation.uses),
       formatLastUse(installation.lastUse),
       installation.kind === "plugin" ? String(installation.hooks) : "",
-      note(installation),
+      installNote(installation),
     ]),
   ];
   const widths = columnWidths(rows);
