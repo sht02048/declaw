@@ -375,7 +375,7 @@ describe("TUI groups", () => {
     const { config, result } = await exampleReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
 
-    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used {2}0 Too New · 2 recommended\s+0 selected$/);
+    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
 
     await press(stdin, "r");
 

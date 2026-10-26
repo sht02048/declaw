@@ -28,12 +28,11 @@ export function isChild(listRow: ListRow | undefined): boolean {
 
 export const ACCENT = "cyan";
 
-export const STATUS_ORDER: UsageStatus[] = ["unused", "used", "too-new", "unknown"];
+export const STATUS_ORDER: UsageStatus[] = ["unused", "used", "unknown"];
 
 export const STATUS_COLORS: Record<UsageStatus, string> = {
   unused: "yellow",
   used: "green",
-  "too-new": "cyan",
   unknown: "gray",
 };
 

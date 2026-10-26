@@ -5,10 +5,8 @@ import { actionText } from "../cli/actions.js";
 import { formatDate, formatHooksPerSession, installNote, kindLabel, USAGE_STATUS_LABELS } from "../cli/format.js";
 import { countOf } from "../plural.js";
 import { STATUS_COLORS } from "./list.js";
-import { daysBetween } from "./text.js";
 
 export interface DetailContext {
-  now: Date;
   periodStart: Date | null;
   configDir: string;
 }
@@ -75,7 +73,7 @@ export function detailLines(installation: Installation, context: DetailContext):
   return lines.filter((line) => line !== false);
 }
 
-function statusReason(installation: Installation, { now, periodStart }: DetailContext): string {
+function statusReason(installation: Installation, { periodStart }: DetailContext): string {
   switch (installation.usageStatus) {
     case "unused":
       return periodStart === null ? "No Use known" : `No Use since ${formatDate(periodStart)}`;
@@ -83,12 +81,6 @@ function statusReason(installation: Installation, { now, periodStart }: DetailCo
       const { lastUse, uses } = installation;
       const last = lastUse instanceof Date ? `Last used ${formatDate(lastUse)}` : "Used";
       return typeof uses === "number" ? `${last}, ${countOf(uses, "Use")} in the covered period` : last;
-    }
-    case "too-new": {
-      if (periodStart === null) return "No transcripts yet, too new to judge";
-      if (installation.installedAt === null) return "Too new to judge";
-      const days = daysBetween(installation.installedAt, now);
-      return `Installed ${days <= 0 ? "today" : `${countOf(days, "day")} ago`}, too new to judge`;
     }
     case "unknown":
       return "Last Use cannot be known, a data source is unreadable";

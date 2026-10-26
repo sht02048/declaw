@@ -49,7 +49,7 @@ Whether an Installation is installed and whether it is enabled, plus facts that 
 _Avoid_: state, stat
 
 **Usage Status**:
-Which one of Used, Unused, Too New, or Unknown an Installation is, judged from its Usage Stats. Distinct from Install Status.
+Which one of Used, Unused, or Unknown an Installation is, judged only from its Usage Stats, regardless of when it was installed. Distinct from Install Status.
 _Avoid_: status, state, verdict
 
 **Used**:
@@ -59,10 +59,6 @@ _Avoid_: active, alive
 **Unused**:
 Having no known Use at all: none during the period the Usage Stats cover, and no older last Use.
 _Avoid_: useless, dead, stale
-
-**Too New**:
-Installed more recently than the start of the period the Usage Stats cover, or with no period at all, so there is not enough history to call it Unused.
-_Avoid_: recent, fresh, new
 
 **Unknown**:
 The Usage Status of an Installation whose last Use cannot be known because a data source it depends on is unreadable. It is never called Unused.

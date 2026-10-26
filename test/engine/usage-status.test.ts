@@ -10,9 +10,27 @@ function usageStatuses(result: Report): Record<string, string> {
 }
 
 describe("report: Usage Statuses", () => {
-  it("marks a Plugin installed after the covered period began Too New, by its install record", async () => {
+  it("judges an Installation installed after the covered period began by its Uses alone", async () => {
     const config = await fakeConfigDir();
-    await config.plugin("old@market", { installedAt: "2026-09-01T00:00:00.000Z" });
+    await config.plugin("new-used@market", { installedAt: "2026-10-20T00:00:00.000Z", skills: ["work"] });
+    await config.plugin("new-idle@market", { installedAt: "2026-10-20T00:00:00.000Z" });
+    await config.standaloneSkill("new-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", periodStart),
+      skillToolCall("new-used:work", "2026-10-21T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "new-idle@market", usageStatus: "unused", recommended: true },
+      { name: "new-skill", usageStatus: "unused", recommended: true },
+      { name: "new-used@market", usageStatus: "used", recommended: false },
+    ]);
+  });
+
+  it("reads a Plugin's install time from its install record", async () => {
+    const config = await fakeConfigDir();
     await config.plugin("new@market", { installedAt: "2026-10-20T00:00:00.000Z" });
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", periodStart),
@@ -20,28 +38,12 @@ describe("report: Usage Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(usageStatuses(result)).toEqual({ "old@market": "unused", "new@market": "too-new" });
-  });
-
-  it("marks a Standalone Skill whose folder was created after the period began Too New", async () => {
-    const config = await fakeConfigDir();
-    await config.standaloneSkill("old-skill", { createdAt: "2026-09-01T00:00:00.000Z" });
-    await config.standaloneSkill("new-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
-    await config.syncedSkill("new-synced", "org_account", { createdAt: "2026-10-20T00:00:00.000Z" });
-    await config.transcript({ project: "/work/app", session: "s1" }, [
-      userPrompt("hello", periodStart),
+    expect(result.installations).toMatchObject([
+      { name: "new@market", installedAt: new Date("2026-10-20T00:00:00.000Z") },
     ]);
-
-    const result = await report({ ...config.paths, now });
-
-    expect(usageStatuses(result)).toEqual({
-      "old-skill": "unused",
-      "new-skill": "too-new",
-      "anthropic-skills:new-synced": "too-new",
-    });
   });
 
-  it("keeps a Standalone Skill copied with old timestamps Too New, by its creation time", async () => {
+  it("reads a Standalone Skill copied with old timestamps as installed at its creation time", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("copied-skill", {
       createdAt: "2026-10-20T00:00:00.000Z",
@@ -54,50 +56,52 @@ describe("report: Usage Statuses", () => {
     const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
-      { name: "copied-skill", usageStatus: "too-new", installedAt: new Date("2026-10-20T00:00:00.000Z") },
+      { name: "copied-skill", usageStatus: "unused", installedAt: new Date("2026-10-20T00:00:00.000Z") },
     ]);
   });
 
   it("falls back to a folder's modification time when the filesystem has no creation time", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("new-skill", { createdAt: null, modifiedAt: "2026-10-20T00:00:00.000Z" });
-    await config.standaloneSkill("old-skill", { createdAt: null, modifiedAt: "2026-09-01T00:00:00.000Z" });
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", periodStart),
     ]);
 
     const result = await report({ ...config.paths, now });
 
-    expect(usageStatuses(result)).toEqual({ "old-skill": "unused", "new-skill": "too-new" });
+    expect(result.installations).toMatchObject([
+      { name: "new-skill", installedAt: new Date("2026-10-20T00:00:00.000Z") },
+    ]);
   });
 
-  it("judges a Linked Skill by the link's own time, not its target's", async () => {
+  it("reads a Linked Skill's install time from the link itself, not its target", async () => {
     const config = await fakeConfigDir();
     await config.linkedSkill("new-link", {
       createdAt: "2026-10-20T00:00:00.000Z",
       targetCreatedAt: "2026-01-01T00:00:00.000Z",
     });
-    await config.linkedSkill("old-link", {
-      createdAt: "2026-09-01T00:00:00.000Z",
-      targetCreatedAt: "2026-10-20T00:00:00.000Z",
-    });
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("hello", periodStart),
     ]);
 
     const result = await report({ ...config.paths, now });
 
-    expect(usageStatuses(result)).toEqual({ "new-link": "too-new", "old-link": "unused" });
+    expect(result.installations).toMatchObject([
+      { name: "new-link", installedAt: new Date("2026-10-20T00:00:00.000Z") },
+    ]);
   });
 
-  it("marks everything Too New while no transcripts cover any period", async () => {
+  it("marks everything Unused while no transcripts cover any period", async () => {
     const config = await fakeConfigDir();
     await config.plugin("old@market", { installedAt: "2025-01-01T00:00:00.000Z" });
     await config.standaloneSkill("old-skill", { createdAt: "2025-01-01T00:00:00.000Z" });
 
     const result = await report({ ...config.paths, now });
 
-    expect(usageStatuses(result)).toEqual({ "old@market": "too-new", "old-skill": "too-new" });
+    expect(result.installations).toMatchObject([
+      { name: "old@market", usageStatus: "unused", recommended: true },
+      { name: "old-skill", usageStatus: "unused", recommended: true },
+    ]);
   });
 
   it("marks an Installation with a Use in the period Used, and one without Unused", async () => {
@@ -168,11 +172,11 @@ describe("report: sorting", () => {
     await config.standaloneSkill("c-unused-oldest", { createdAt: "2026-01-01T00:00:00.000Z" });
     await config.linkedSkill("d-unused-middle", { createdAt: "2026-06-01T00:00:00.000Z" });
     await config.standaloneSkill("e-used-early");
-    await config.standaloneSkill("f-too-new-used", { createdAt: "2026-10-01T00:00:00.000Z" });
+    await config.standaloneSkill("f-used-recent-install", { createdAt: "2026-10-01T00:00:00.000Z" });
     await config.transcript({ project: "/work/app", session: "s1" }, [
       userPrompt("go", periodStart),
       skillToolCall("e-used-early", "2026-10-02T09:00:00.000Z"),
-      skillToolCall("f-too-new-used", "2026-10-05T09:00:00.000Z"),
+      skillToolCall("f-used-recent-install", "2026-10-05T09:00:00.000Z"),
       skillToolCall("b-used-late:work", "2026-10-09T09:00:00.000Z"),
     ]);
 
@@ -183,27 +187,8 @@ describe("report: sorting", () => {
       "d-unused-middle",
       "a-unused-recent@market",
       "e-used-early",
-      "f-too-new-used",
+      "f-used-recent-install",
       "b-used-late@market",
-    ]);
-  });
-
-  it("puts Installations with no last Use ahead of used ones after the Unused", async () => {
-    const config = await fakeConfigDir();
-    await config.standaloneSkill("used-skill");
-    await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
-    await config.standaloneSkill("idle-skill");
-    await config.transcript({ project: "/work/app", session: "s1" }, [
-      userPrompt("go", periodStart),
-      skillToolCall("used-skill", "2026-10-02T09:00:00.000Z"),
-    ]);
-
-    const result = await report({ ...config.paths, now });
-
-    expect(result.installations.map((i) => i.name)).toEqual([
-      "idle-skill",
-      "fresh-skill",
-      "used-skill",
     ]);
   });
 });
@@ -241,7 +226,7 @@ describe("report: the recommended Cleanup set", () => {
     expect(recommended(result)).toEqual(["switched-off@market"]);
   });
 
-  it("never recommends a Too New Installation, even an Unused or disabled one", async () => {
+  it("recommends recently installed Unused or disabled Installations", async () => {
     const config = await fakeConfigDir();
     await config.plugin("fresh@market", { installedAt: "2026-10-20T00:00:00.000Z" });
     await config.plugin("fresh-off@market", { installedAt: "2026-10-20T00:00:00.000Z" });
@@ -254,7 +239,7 @@ describe("report: the recommended Cleanup set", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(recommended(result)).toEqual([]);
+    expect(recommended(result).sort()).toEqual(["fresh-link", "fresh-off@market", "fresh-skill", "fresh@market"]);
   });
 
   it("never recommends a Synced Skill, even an Unused one", async () => {
