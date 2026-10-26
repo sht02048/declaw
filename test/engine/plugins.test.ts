@@ -204,6 +204,8 @@ describe("report: plugin skill Uses", () => {
       {
         kind: "plugin",
         name: "omc-tools@omc",
+        installedAt: new Date("2026-09-01T00:00:00.000Z"),
+        status: "used",
         enabled: true,
         hooks: 0,
         uses: 3,

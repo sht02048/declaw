@@ -13,6 +13,7 @@ export interface ComponentEntry {
 
 export interface PluginEntry {
   key: string;
+  installedAt: Date | null;
   enabled: boolean;
   hooks: number;
   components: ComponentEntry[];
@@ -41,7 +42,7 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
     const components = await findComponents(record.installPath, namespace, manifest);
     const hooks = await countHooks(record.installPath, manifest.hooks);
-    plugins.push({ key, enabled, hooks, components });
+    plugins.push({ key, installedAt: dateIn(record.installedAt), enabled, hooks, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -141,6 +142,12 @@ async function marketplaceEntry(marketplaces: JsonObject, key: string): Promise<
   const catalog = await readJson(join(installLocation, ".claude-plugin", "marketplace.json"));
   const entries = Array.isArray(catalog?.plugins) ? catalog.plugins.map(asObject) : [];
   return entries.find((entry) => entry.name === pluginName(key)) ?? null;
+}
+
+function dateIn(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function pluginName(key: string): string {

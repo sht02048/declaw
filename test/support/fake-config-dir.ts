@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { lutimes, mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative as relativePath } from "node:path";
 import { onTestFinished } from "vitest";
@@ -112,25 +112,41 @@ export class FakeConfigDir {
     return dirname(this.path);
   }
 
-  async standaloneSkill(name: string): Promise<this> {
-    await writeSkillFolder(join(this.path, "skills", name), name);
+  async standaloneSkill(name: string, { createdAt = DEFAULT_CREATED_AT } = {}): Promise<this> {
+    const dir = join(this.path, "skills", name);
+    await writeSkillFolder(dir, name);
+    await backdate(dir, createdAt);
     return this;
   }
 
   async linkedSkill(
     name: string,
-    { target = join(this.home, ".agents", "skills", name), relative = false } = {},
+    {
+      target = join(this.home, ".agents", "skills", name),
+      relative = false,
+      createdAt = DEFAULT_CREATED_AT,
+      targetCreatedAt = DEFAULT_CREATED_AT,
+    } = {},
   ): Promise<this> {
     await writeSkillFolder(target, name);
+    await backdate(target, targetCreatedAt);
     const skillsDir = join(this.path, "skills");
     await mkdir(skillsDir, { recursive: true });
-    await symlink(relative ? relativePath(skillsDir, target) : target, join(skillsDir, name));
+    const link = join(skillsDir, name);
+    await symlink(relative ? relativePath(skillsDir, target) : target, link);
+    await lutimes(link, new Date(createdAt), new Date(createdAt));
     return this;
   }
 
-  async syncedSkill(name: string, account = "org_account"): Promise<this> {
+  async syncedSkill(
+    name: string,
+    account = "org_account",
+    { createdAt = DEFAULT_CREATED_AT } = {},
+  ): Promise<this> {
     const accountDir = join(this.path, "skills", "synced", account);
-    await writeSkillFolder(join(accountDir, name), name);
+    const dir = join(accountDir, name);
+    await writeSkillFolder(dir, name);
+    await backdate(dir, createdAt);
     await writeFile(join(accountDir, "manifest.json"), JSON.stringify({ skills: [name] }));
     return this;
   }
@@ -153,6 +169,13 @@ export async function fakeConfigDir(): Promise<FakeConfigDir> {
   const path = join(root, ".claude");
   await mkdir(path);
   return new FakeConfigDir(path);
+}
+
+const DEFAULT_CREATED_AT = "2026-09-01T00:00:00.000Z";
+
+async function backdate(path: string, createdAt: string): Promise<void> {
+  const at = new Date(createdAt);
+  await utimes(path, at, at);
 }
 
 async function writeSkillFolder(dir: string, name: string): Promise<void> {

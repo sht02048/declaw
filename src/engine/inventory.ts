@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { readlink, stat } from "node:fs/promises";
+import { lstat, readlink, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { listDir } from "./fs.js";
 
@@ -9,6 +9,7 @@ const SYNCED_SKILLS_NAMESPACE = "anthropic-skills";
 export interface StandaloneSkillEntry {
   name: string;
   path: string;
+  createdAt: Date;
   linked?: { target: string };
   synced?: true;
 }
@@ -20,10 +21,10 @@ export async function findStandaloneSkills(configDir: string): Promise<Standalon
     if (entry.name === SYNCED_SKILLS_DIR) continue;
     const path = join(skillsDir, entry.name);
     if (entry.isDirectory()) {
-      skills.push({ name: entry.name, path });
+      skills.push({ name: entry.name, path, createdAt: await createdAt(path) });
     } else if (await isLinkToFolder(entry, path)) {
       const target = resolve(skillsDir, await readlink(path));
-      skills.push({ name: entry.name, path, linked: { target } });
+      skills.push({ name: entry.name, path, createdAt: await createdAt(path), linked: { target } });
     }
   }
   skills.push(...(await findSyncedSkills(join(skillsDir, SYNCED_SKILLS_DIR))));
@@ -37,14 +38,23 @@ async function findSyncedSkills(syncedDir: string): Promise<StandaloneSkillEntry
     const accountDir = join(syncedDir, account.name);
     for (const entry of await listDir(accountDir)) {
       if (!entry.isDirectory()) continue;
+      const path = join(accountDir, entry.name);
       skills.push({
         name: `${SYNCED_SKILLS_NAMESPACE}:${entry.name}`,
-        path: join(accountDir, entry.name),
+        path,
+        createdAt: await createdAt(path),
         synced: true,
       });
     }
   }
   return skills;
+}
+
+async function createdAt(path: string): Promise<Date> {
+  const { birthtimeMs, mtimeMs } = await lstat(path);
+  // Some Linux filesystems report no birth time (0), and a copy that preserved
+  // times can carry an mtime older than its birth time; the earlier one wins.
+  return new Date(birthtimeMs > 0 ? Math.min(birthtimeMs, mtimeMs) : mtimeMs);
 }
 
 async function isLinkToFolder(entry: Dirent, path: string): Promise<boolean> {

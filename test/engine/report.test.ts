@@ -4,6 +4,7 @@ import { report } from "../../src/engine/index.js";
 import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
+const installedAt = new Date("2026-09-01T00:00:00.000Z");
 
 describe("report: Standalone Skill Usage Stats", () => {
   it("counts Skill tool calls as Uses of a Standalone Skill", async () => {
@@ -20,6 +21,8 @@ describe("report: Standalone Skill Usage Stats", () => {
       {
         kind: "standalone-skill",
         name: "linear-ticket",
+        installedAt,
+        status: "used",
         uses: 2,
         lastUse: new Date("2026-10-09T10:30:00.000Z"),
       },
@@ -45,6 +48,8 @@ describe("report: Standalone Skill Usage Stats", () => {
       {
         kind: "standalone-skill",
         name: "orca-linear",
+        installedAt,
+        status: "used",
         uses: 3,
         lastUse: new Date("2026-10-12T09:00:00.000Z"),
       },
@@ -66,6 +71,8 @@ describe("report: Standalone Skill Usage Stats", () => {
     expect(result.installations).toContainEqual({
       kind: "standalone-skill",
       name: "ux-writing",
+      installedAt,
+      status: "unused",
       uses: 0,
       lastUse: null,
     });
@@ -80,7 +87,14 @@ describe("report: Standalone Skill Usage Stats", () => {
     expect(result).toEqual({
       period: { start: null, end: now },
       installations: [
-        { kind: "standalone-skill", name: "linear-ticket", uses: 0, lastUse: null },
+        {
+          kind: "standalone-skill",
+          name: "linear-ticket",
+          installedAt,
+          status: "too-new",
+          uses: 0,
+          lastUse: null,
+        },
       ],
     });
   });
@@ -121,6 +135,8 @@ describe("report: Linked Skills and Synced Skills", () => {
       {
         kind: "standalone-skill",
         name: "find-skills",
+        installedAt,
+        status: "used",
         uses: 2,
         lastUse: new Date("2026-10-11T09:00:00.000Z"),
         linked: { target: join(config.home, ".agents", "skills", "find-skills") },
@@ -142,6 +158,8 @@ describe("report: Linked Skills and Synced Skills", () => {
       {
         kind: "standalone-skill",
         name: "release-notes",
+        installedAt,
+        status: "used",
         uses: 1,
         lastUse: new Date("2026-10-06T09:00:00.000Z"),
         linked: { target },
@@ -164,6 +182,8 @@ describe("report: Linked Skills and Synced Skills", () => {
       {
         kind: "standalone-skill",
         name: "anthropic-skills:docx",
+        installedAt,
+        status: "used",
         uses: 2,
         lastUse: new Date("2026-10-07T09:00:00.000Z"),
         synced: true,

@@ -1,7 +1,10 @@
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
+import { statusOf, type Status } from "./statuses.js";
 import { entryTimestamp, usesIn } from "./uses.js";
+
+export type { Status } from "./statuses.js";
 
 interface UsageTally {
   uses: number;
@@ -21,6 +24,8 @@ export interface CoveredPeriod {
 export interface StandaloneSkill {
   kind: "standalone-skill";
   name: string;
+  installedAt: Date | null;
+  status: Status;
   uses: number;
   lastUse: Date | null;
   linked?: { target: string };
@@ -37,6 +42,8 @@ export interface Component {
 export interface Plugin {
   kind: "plugin";
   name: string;
+  installedAt: Date | null;
+  status: Status;
   enabled: boolean;
   hooks: number;
   uses: number;
@@ -79,21 +86,37 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   return {
     period: { start, end: now },
     installations: [
-      ...plugins.map((plugin) => pluginInstallation(plugin, usage)),
-      ...skills.map((skill): StandaloneSkill => ({
-        kind: "standalone-skill",
-        name: skill.name,
-        ...usage.get(skill.name)!,
-        ...(skill.linked && { linked: skill.linked }),
-        ...(skill.synced && { synced: skill.synced }),
-      })),
+      ...plugins.map((plugin) => judged(pluginInstallation(plugin, usage), start)),
+      ...skills.map((skill) =>
+        judged(
+          {
+            kind: "standalone-skill" as const,
+            name: skill.name,
+            installedAt: skill.createdAt,
+            ...usage.get(skill.name)!,
+            ...(skill.linked && { linked: skill.linked }),
+            ...(skill.synced && { synced: skill.synced }),
+          },
+          start,
+        ),
+      ),
     ],
   };
 }
 
+function judged<T extends Omit<Installation, "status">>(
+  installation: T,
+  periodStart: Date | null,
+): T & { status: Status } {
+  return { ...installation, status: statusOf(installation, periodStart) };
+}
+
 const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
 
-function pluginInstallation(plugin: PluginEntry, usage: Map<string, UsageTally>): Plugin {
+function pluginInstallation(
+  plugin: PluginEntry,
+  usage: Map<string, UsageTally>,
+): Omit<Plugin, "status"> {
   const components = plugin.components.map(
     (component): Component => ({
       ...component,
@@ -111,6 +134,7 @@ function pluginInstallation(plugin: PluginEntry, usage: Map<string, UsageTally>)
   return {
     kind: "plugin",
     name: plugin.key,
+    installedAt: plugin.installedAt,
     enabled: plugin.enabled,
     hooks: plugin.hooks,
     uses,

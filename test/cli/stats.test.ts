@@ -44,10 +44,19 @@ describe("declaw stats", () => {
         {
           kind: "standalone-skill",
           name: "linear-ticket",
+          installedAt: "2026-09-01T00:00:00.000Z",
+          status: "used",
           uses: 1,
           lastUse: "2026-10-09T10:30:00.000Z",
         },
-        { kind: "standalone-skill", name: "ux-writing", uses: 0, lastUse: null },
+        {
+          kind: "standalone-skill",
+          name: "ux-writing",
+          installedAt: "2026-09-01T00:00:00.000Z",
+          status: "unused",
+          uses: 0,
+          lastUse: null,
+        },
       ],
     });
   });
