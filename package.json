@@ -23,6 +23,9 @@
     "linux"
   ],
   "scripts": {
+    "start": "npm run build --silent && node dist/cli.js",
+    "stats": "npm start --silent -- stats",
+    "dry-run": "npm start --silent -- --dry-run",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

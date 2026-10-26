@@ -41,6 +41,15 @@ Each Installation's Usage Status is Unused, Used, or Too New. Too New means it w
 
 ## Development
 
+To run declaw from a clone, each of these builds first:
+
+```sh
+npm start                  # interactive Cleanup, same as `declaw`
+npm run dry-run            # interactive, ending at the confirmation screen
+npm run stats              # Usage Stats table
+npm start -- stats --json  # pass any other arguments after --
+```
+
 ```sh
 npm install          # install dev dependencies
 npm test             # run the test suite once (Vitest)
