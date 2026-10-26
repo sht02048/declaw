@@ -1,4 +1,4 @@
-import { chmod, writeFile } from "node:fs/promises";
+import { chmod, mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { report } from "../../src/engine/index.js";
@@ -159,6 +159,30 @@ describe("report: Linked Skills and Synced Skills", () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("review");
     await config.skillsFolderFile("AGENTS.md", "Notes for agents.");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
+  });
+
+  it("lists only folders with a SKILL.md as Standalone Skills, never dot-folders", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("review");
+    await config.skillsFolderDir(".cache", { "SKILL.md": "cached" });
+    await config.skillsFolderDir("notes", { "README.md": "Notes." });
+    await config.skillsFolderDir("empty");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
+  });
+
+  it("ignores a link to a folder without a SKILL.md", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("review");
+    const target = join(config.home, "code", "not-a-skill");
+    await mkdir(target, { recursive: true });
+    await symlink(target, join(config.path, "skills", "not-a-skill"));
 
     const result = await report({ configDir: config.path, now });
 

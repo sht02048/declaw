@@ -1,6 +1,6 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { listDir } from "./fs.js";
+import { exists, isSkillFolder, listDir } from "./fs.js";
 import { readable, readJsonFile, unreadable, type ReadStatus } from "./read-status.js";
 
 type JsonObject = Record<string, unknown>;
@@ -93,10 +93,10 @@ async function collect(paths: string[], find: (path: string) => Promise<string[]
 }
 
 async function skillsIn(dir: string): Promise<string[]> {
-  if (await exists(join(dir, "SKILL.md"))) return [basename(dir)];
+  if (await isSkillFolder(dir)) return [basename(dir)];
   const names: string[] = [];
   for (const entry of await listDir(dir)) {
-    if (await exists(join(dir, entry.name, "SKILL.md"))) names.push(entry.name);
+    if (await isSkillFolder(join(dir, entry.name))) names.push(entry.name);
   }
   return names;
 }
@@ -172,17 +172,6 @@ function pluginName(key: string): string {
 function marketplaceName(key: string): string {
   const at = key.lastIndexOf("@");
   return at > 0 ? key.slice(at + 1) : "";
-}
-
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return false;
-    throw error;
-  }
 }
 
 async function readJson(file: string): Promise<JsonObject | null> {
