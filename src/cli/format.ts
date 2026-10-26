@@ -12,7 +12,6 @@ export const SOURCE_LABELS: Record<keyof DataSources, string> = {
 export const USAGE_STATUS_LABELS: Record<UsageStatus, string> = {
   unused: "Unused",
   used: "Used",
-  "too-new": "Too New",
   unknown: "Unknown",
 };
 

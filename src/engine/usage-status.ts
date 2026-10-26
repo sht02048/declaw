@@ -1,6 +1,6 @@
 import type { Unknown } from "./read-status.js";
 
-export type UsageStatus = "unused" | "used" | "too-new" | Unknown;
+export type UsageStatus = "unused" | "used" | Unknown;
 
 interface Judgeable {
   installedAt: Date | null;

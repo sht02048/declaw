@@ -103,10 +103,10 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const footer = footerOf(state, dryRun);
 
   const fixedHeight = header.length + body.header.length + footer.length;
-  const detailContext = { now, periodStart: report.period.start, configDir };
+  const detailContext = { periodStart: report.period.start, configDir };
   const panelHeight = useMemo(
     () => Math.max(0, ...installations.map((installation) => detailLines(installation, detailContext).length)) + 2,
-    [installations, now, configDir],
+    [installations, configDir],
   );
   const current =
     screen === "list" ? installations[listRowsOf(installations, state.expanded)[state.cursor]?.index ?? -1] : undefined;
