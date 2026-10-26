@@ -5,16 +5,25 @@ type JsonObject = Record<string, unknown>;
 
 export interface PluginEntry {
   key: string;
+  enabled: boolean;
 }
 
 export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
   const installed = await readJson(join(configDir, "plugins", "installed_plugins.json"));
-  const records = asObject(installed?.plugins);
+  const settings = await readJson(join(configDir, "settings.json"));
+  const enabledPlugins = asObject(settings?.enabledPlugins);
+
   const plugins: PluginEntry[] = [];
-  for (const [key, scopes] of Object.entries(records)) {
-    if (!Array.isArray(scopes)) continue;
-    if (!scopes.some((record) => asObject(record).scope === "user")) continue;
-    plugins.push({ key });
+  for (const [key, records] of Object.entries(asObject(installed?.plugins))) {
+    const record = (Array.isArray(records) ? records : [])
+      .map(asObject)
+      .find((candidate) => candidate.scope === "user");
+    if (!record || typeof record.installPath !== "string") continue;
+
+    const manifest = await readJson(join(record.installPath, ".claude-plugin", "plugin.json"));
+    const setting = enabledPlugins[key];
+    const enabled = typeof setting === "boolean" ? setting : manifest?.defaultEnabled !== false;
+    plugins.push({ key, enabled });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }

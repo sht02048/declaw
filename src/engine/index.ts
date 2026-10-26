@@ -23,6 +23,7 @@ export interface StandaloneSkill {
 export interface Plugin {
   kind: "plugin";
   name: string;
+  enabled: boolean;
   uses: number;
   lastUse: Date | null;
 }
@@ -60,6 +61,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
       ...plugins.map((plugin): Plugin => ({
         kind: "plugin",
         name: plugin.key,
+        enabled: plugin.enabled,
         uses: 0,
         lastUse: null,
       })),

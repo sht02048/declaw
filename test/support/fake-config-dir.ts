@@ -14,6 +14,7 @@ export interface PluginFixture {
   scope?: "user" | "project" | "local";
   version?: string;
   installedAt?: string;
+  manifest?: JsonObject | null;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -28,7 +29,10 @@ export class FakeConfigDir {
     const version = fixture.version ?? "1.0.0";
     const installPath = join(this.path, "plugins", "cache", marketplace, name, version);
     await mkdir(installPath, { recursive: true });
-    await writeJson(join(installPath, ".claude-plugin", "plugin.json"), { name });
+    const manifest = fixture.manifest === undefined ? { name } : fixture.manifest;
+    if (manifest !== null) {
+      await writeJson(join(installPath, ".claude-plugin", "plugin.json"), manifest);
+    }
 
     const scope = fixture.scope ?? "user";
     const installedAt = fixture.installedAt ?? "2026-09-01T00:00:00.000Z";
@@ -44,6 +48,11 @@ export class FakeConfigDir {
       version: 2,
       plugins: this.installRecords,
     });
+    return this;
+  }
+
+  async enabledPlugins(enabledPlugins: Record<string, boolean>): Promise<this> {
+    await writeJson(join(this.path, "settings.json"), { enabledPlugins });
     return this;
   }
 
