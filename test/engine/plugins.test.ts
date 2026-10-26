@@ -108,6 +108,20 @@ describe("report: Plugin Inventory", () => {
     ]);
   });
 
+  it("ignores a plain file sitting directly in a plugin's skills folder", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("toolkit@market", {
+      skills: ["review"],
+      files: { "skills/AGENTS.md": "Notes for agents." },
+    });
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
+      "skill toolkit:review",
+    ]);
+  });
+
   it("uses the marketplace entry as the manifest when the plugin has no manifest", async () => {
     const config = await fakeConfigDir();
     await config.plugin("example-bundle@market", {
