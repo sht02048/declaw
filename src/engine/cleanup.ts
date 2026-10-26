@@ -37,9 +37,11 @@ export async function cleanup(selection: Installation[], options: CleanupOptions
 async function perform(action: PlannedAction, { trash }: CleanupOptions): Promise<void> {
   switch (action.kind) {
     case "remove-link":
-      if ((await lstat(action.path)).isSymbolicLink()) await unlink(action.path);
+      if (!(await lstat(action.path)).isSymbolicLink()) throw new Error(`${action.path} is no longer a link`);
+      await unlink(action.path);
       return;
     case "move-to-trash":
+      if (!(await lstat(action.path)).isDirectory()) throw new Error(`${action.path} is no longer a folder`);
       await trash(action.path);
       return;
     case "uninstall-plugin":

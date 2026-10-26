@@ -1,4 +1,4 @@
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cleanup, report, type Installation, type Report } from "../../src/engine/index.js";
@@ -88,5 +88,43 @@ describe("cleanup", () => {
     expect(await exists(stuck)).toBe(true);
     expect(trash.moves).toEqual([join(config.path, "skills", "ux-writing")]);
     expect(await exists(join(config.path, "skills", "find-skills"))).toBe(false);
+  });
+
+  it("leaves a Linked Skill alone when its link became a real folder since the Report", async () => {
+    const config = await fakeConfigDir();
+    await config.linkedSkill("find-skills");
+    const result = await report({ configDir: config.path, now });
+    const path = join(config.path, "skills", "find-skills");
+    await rm(path);
+    await config.standaloneSkill("find-skills");
+    const { trash, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "find-skills"), options);
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({ name: "find-skills", result: "failed", message: `${path} is no longer a link` }),
+    ]);
+    expect(await readdir(path)).toEqual(["SKILL.md"]);
+    expect(trash.moves).toEqual([]);
+  });
+
+  it("leaves a real Standalone Skill alone when its folder became a link since the Report", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("ux-writing");
+    const result = await report({ configDir: config.path, now });
+    const path = join(config.path, "skills", "ux-writing");
+    await rm(path, { recursive: true });
+    const target = join(config.home, "repo", "ux-writing");
+    await config.linkedSkill("ux-writing", { target });
+    const { trash, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "ux-writing"), options);
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({ name: "ux-writing", result: "failed", message: `${path} is no longer a folder` }),
+    ]);
+    expect((await lstat(path)).isSymbolicLink()).toBe(true);
+    expect(await readdir(target)).toEqual(["SKILL.md"]);
+    expect(trash.moves).toEqual([]);
   });
 });
