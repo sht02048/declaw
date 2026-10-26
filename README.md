@@ -19,6 +19,8 @@ declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set,
 
 The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used.
 
+Each Installation is marked Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill), so there is not enough history to judge it. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
+
 ## Development
 
 ```sh
