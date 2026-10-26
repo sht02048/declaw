@@ -566,4 +566,23 @@ describe("report: read status of each data source", () => {
       { name: "skills@sht02048-skills", uses: 0, lastUse: "unknown" },
     ]);
   });
+
+  it("shows a Plugin's last Use as unknown when an unreadable transcript could hold a later one", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("skills@sht02048-skills", { skills: ["commit", "pr"] });
+    await config.corruptConfigFile();
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("skills:pr", "2026-10-02T09:00:00.000Z"),
+    ]);
+    await config.transcript({ project: "/work/app", session: "s2" }, [
+      skillToolCall("skills:commit", "2026-10-20T09:00:00.000Z"),
+    ]);
+    await chmod(join(config.path, "projects", "-work-app", "s2.jsonl"), 0o000);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "skills@sht02048-skills", uses: 1, lastUse: "unknown" },
+    ]);
+  });
 });

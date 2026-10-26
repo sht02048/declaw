@@ -132,14 +132,14 @@ function pluginInstallation(
     uses,
     lastUse: latestLastUse(
       components.map((component) => component.lastUse),
-      transcripts.start,
+      transcripts.status.status === "readable" ? transcripts.start : null,
     ),
     components,
   };
 }
 
-// An unknown last Use is never inside the covered period, since readable transcripts would have
-// shown it, so it can only be ignored next to a known last Use that falls inside the period.
+// An unknown last Use is never inside the covered period, since fully readable transcripts would
+// have shown it, so it can only be ignored next to a known last Use that falls inside the period.
 function latestLastUse(lastUses: Usage["lastUse"][], periodStart: Date | null): Usage["lastUse"] {
   let latest: Date | null = null;
   let anyUnknown = false;
