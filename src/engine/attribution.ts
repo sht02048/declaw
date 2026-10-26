@@ -1,5 +1,5 @@
 import type { StandaloneSkillRecord } from "./inventory.js";
-import type { ComponentRecord, ComponentKind, PluginRecord } from "./plugins.js";
+import { pluginName, type ComponentKind, type ComponentRecord, type PluginRecord } from "./plugins.js";
 import type { Use, UseKind } from "./uses.js";
 
 export interface UsageTally {
@@ -56,7 +56,7 @@ export class UsageLedger {
 
   private addMcpServer(plugin: PluginRecord, component: ComponentRecord): void {
     const server = component.name.slice(plugin.namespace.length + 1);
-    const pluginNames = new Set([plugin.namespace, pluginNameOf(plugin.key)]);
+    const pluginNames = new Set([plugin.namespace, pluginName(plugin.key)]);
     for (const pluginName of pluginNames) {
       const prefix = `mcp__plugin_${toolNamePart(pluginName)}_${toolNamePart(server)}__`;
       this.mcpPrefixes.push({ prefix, component: component.name });
@@ -70,11 +70,6 @@ export class UsageLedger {
 
 function key(kind: UseKind, name: string): string {
   return `${kind} ${name}`;
-}
-
-function pluginNameOf(key: string): string {
-  const at = key.lastIndexOf("@");
-  return at > 0 ? key.slice(0, at) : key;
 }
 
 function toolNamePart(name: string): string {

@@ -44,8 +44,8 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
 
   const installed = await readJsonFile(join(configDir, "plugins", "installed_plugins.json"), "install records");
   if (!installed.ok) return { installRecords: installed.status, settings, pluginFiles: readable, plugins: [] };
-  const records = (installed.value as JsonObject | null)?.plugins;
-  if (typeof records !== "object" || records === null || Array.isArray(records)) {
+  const records = isJsonObject(installed.value) ? installed.value.plugins : undefined;
+  if (!isJsonObject(records)) {
     return {
       installRecords: unreadable("plugins in install records is not an object"),
       settings,
@@ -249,7 +249,7 @@ function dateIn(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function pluginName(key: string): string {
+export function pluginName(key: string): string {
   const at = key.lastIndexOf("@");
   return at > 0 ? key.slice(0, at) : key;
 }
@@ -274,7 +274,5 @@ async function readJson(file: string): Promise<JsonObject | null> {
 }
 
 function asObject(value: unknown): JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as JsonObject)
-    : {};
+  return isJsonObject(value) ? value : {};
 }

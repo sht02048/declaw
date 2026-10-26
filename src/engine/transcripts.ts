@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { listDir } from "./fs.js";
+import { isJsonObject } from "./read-status.js";
 
 export type TranscriptLine = Record<string, unknown>;
 
@@ -44,9 +45,7 @@ export async function* readTranscript(
 function parseLine(line: string): TranscriptLine | null {
   try {
     const value: unknown = JSON.parse(line);
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as TranscriptLine)
-      : null;
+    return isJsonObject(value) ? value : null;
   } catch {
     return null;
   }

@@ -1,3 +1,4 @@
+import { plural } from "../plural.js";
 import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
@@ -234,8 +235,4 @@ function later(a: Date | null, b: Date | null): Date | null {
   if (a === null) return b;
   if (b === null) return a;
   return a > b ? a : b;
-}
-
-function plural(count: number, noun: string): string {
-  return count === 1 ? noun : `${noun}s`;
 }

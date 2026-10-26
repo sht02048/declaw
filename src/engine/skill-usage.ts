@@ -1,4 +1,12 @@
-import { partiallyReadable, readable, readJsonFile, unreadable, type ReadStatus } from "./read-status.js";
+import { plural } from "../plural.js";
+import {
+  isJsonObject,
+  partiallyReadable,
+  readable,
+  readJsonFile,
+  unreadable,
+  type ReadStatus,
+} from "./read-status.js";
 
 export type SkillLastUses = Map<string, Date>;
 
@@ -14,12 +22,12 @@ export async function readSkillUsageCounter(configFile: string): Promise<SkillUs
   const file = await readJsonFile(configFile, "config file");
   if (!file.ok) return { status: file.status, lastUses, skippedSkills };
 
-  if (!isRecord(file.value)) {
+  if (!isJsonObject(file.value)) {
     return { status: unreadable("config file is not a JSON object"), lastUses, skippedSkills };
   }
   const counter = file.value.skillUsage;
   if (counter === undefined) return { status: readable, lastUses, skippedSkills };
-  if (!isRecord(counter)) {
+  if (!isJsonObject(counter)) {
     return {
       status: unreadable("skillUsage in config file is not an object"),
       lastUses,
@@ -36,10 +44,6 @@ export async function readSkillUsageCounter(configFile: string): Promise<SkillUs
   const status =
     skipped === 0
       ? readable
-      : partiallyReadable(`${skipped} unreadable skillUsage ${skipped === 1 ? "record" : "records"} skipped`);
+      : partiallyReadable(`${skipped} unreadable skillUsage ${plural(skipped, "record")} skipped`);
   return { status, lastUses, skippedSkills };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
