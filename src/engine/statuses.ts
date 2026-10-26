@@ -1,8 +1,8 @@
-export type Status = "unused" | "used" | "too-new";
+export type Status = "unused" | "used" | "too-new" | "unknown";
 
 interface Judgeable {
   installedAt: Date | null;
-  lastUse: Date | null;
+  lastUse: Date | null | "unknown";
   enabled?: boolean;
   synced?: true;
 }
@@ -29,13 +29,17 @@ export function sortForCleanup<T extends Judgeable & { status: Status }>(install
   });
 }
 
-function oldestFirst(a: Date | null, b: Date | null): number {
-  return (a?.getTime() ?? -Infinity) - (b?.getTime() ?? -Infinity) || 0;
+function oldestFirst(a: Date | null | "unknown", b: Date | null | "unknown"): number {
+  return timeOf(a) - timeOf(b) || 0;
 }
 
-function statusOf(installation: Judgeable, periodStart: Date | null): Status {
-  if (periodStart === null) return "too-new";
-  const { installedAt } = installation;
-  if (installedAt !== null && installedAt > periodStart) return "too-new";
-  return installation.lastUse === null ? "unused" : "used";
+function timeOf(date: Date | null | "unknown"): number {
+  return date instanceof Date ? date.getTime() : -Infinity;
+}
+
+function statusOf({ installedAt, lastUse }: Judgeable, periodStart: Date | null): Status {
+  if (periodStart !== null && installedAt !== null && installedAt > periodStart) return "too-new";
+  if (lastUse === "unknown") return "unknown";
+  if (lastUse !== null) return "used";
+  return periodStart === null ? "too-new" : "unused";
 }

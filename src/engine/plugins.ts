@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { listDir } from "./fs.js";
+import { readable, readJsonFile, unreadable, type ReadStatus } from "./read-status.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -20,8 +21,19 @@ export interface PluginEntry {
   components: ComponentEntry[];
 }
 
-export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
-  const installed = await readJson(join(configDir, "plugins", "installed_plugins.json"));
+export interface PluginInventory {
+  status: ReadStatus;
+  plugins: PluginEntry[];
+}
+
+export async function findPlugins(configDir: string): Promise<PluginInventory> {
+  const installed = await readJsonFile(join(configDir, "plugins", "installed_plugins.json"), "install records");
+  if (!installed.ok) return { status: installed.status, plugins: [] };
+  const records = (installed.value as JsonObject | null)?.plugins;
+  if (typeof records !== "object" || records === null || Array.isArray(records)) {
+    return { status: unreadable("plugins in install records is not an object"), plugins: [] };
+  }
+
   const settings = await readJson(join(configDir, "settings.json"));
   const enabledPlugins = asObject(settings?.enabledPlugins);
   const marketplaces = asObject(
@@ -29,8 +41,8 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
   );
 
   const plugins: PluginEntry[] = [];
-  for (const [key, records] of Object.entries(asObject(installed?.plugins))) {
-    const record = (Array.isArray(records) ? records : [])
+  for (const [key, scopes] of Object.entries(records)) {
+    const record = (Array.isArray(scopes) ? scopes : [])
       .map(asObject)
       .find((candidate) => candidate.scope === "user");
     if (!record || typeof record.installPath !== "string") continue;
@@ -46,7 +58,7 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const installedAt = dateIn(record.installedAt);
     plugins.push({ key, namespace, installedAt, enabled, hooks, components });
   }
-  return plugins.sort((a, b) => a.key.localeCompare(b.key));
+  return { status: readable, plugins: plugins.sort((a, b) => a.key.localeCompare(b.key)) };
 }
 
 async function findComponents(

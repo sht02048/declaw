@@ -1,4 +1,4 @@
-import { lutimes, mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { lutimes, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative as relativePath } from "node:path";
 import { onTestFinished } from "vitest";
@@ -8,6 +8,10 @@ export type TranscriptLine = Record<string, unknown>;
 export interface TranscriptLocation {
   project: string;
   session: string;
+}
+
+export interface FakeConfigDirOptions {
+  configFileInConfigDir?: boolean;
 }
 
 export interface PluginFixture {
@@ -30,7 +34,10 @@ export class FakeConfigDir {
   private readonly installRecords: Record<string, JsonObject[]> = {};
   private readonly marketplaceEntries: Record<string, JsonObject[]> = {};
 
-  constructor(readonly path: string) {}
+  constructor(
+    readonly path: string,
+    readonly configFile: string,
+  ) {}
 
   async plugin(key: string, fixture: PluginFixture = {}): Promise<this> {
     const [name, marketplace] = key.split("@") as [string, string];
@@ -103,6 +110,21 @@ export class FakeConfigDir {
     await writeJson(join(this.path, "plugins", "known_marketplaces.json"), known);
   }
 
+  get installRecordsFile(): string {
+    return join(this.path, "plugins", "installed_plugins.json");
+  }
+
+  async removeInstallRecords(): Promise<this> {
+    await rm(this.installRecordsFile);
+    return this;
+  }
+
+  async corruptInstallRecords(): Promise<this> {
+    const records = JSON.stringify({ version: 2, plugins: this.installRecords });
+    await writeFile(this.installRecordsFile, records.slice(0, records.length / 2));
+    return this;
+  }
+
   async enabledPlugins(enabledPlugins: Record<string, boolean>): Promise<this> {
     await writeJson(join(this.path, "settings.json"), { enabledPlugins });
     return this;
@@ -151,14 +173,47 @@ export class FakeConfigDir {
     return this;
   }
 
+  async skillUsage(skill: string, lastUsedAt: string, usageCount = 1): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    config.skillUsage = {
+      ...config.skillUsage,
+      [skill]: { usageCount, lastUsedAt: new Date(lastUsedAt).getTime() },
+    };
+    await writeFile(this.configFile, JSON.stringify(config));
+    return this;
+  }
+
+  async corruptConfigFile(): Promise<this> {
+    const config = JSON.stringify({ ...SENSITIVE_CONFIG_FILE_KEYS, skillUsage: {} });
+    await writeFile(this.configFile, config.slice(0, config.length / 2));
+    return this;
+  }
+
+  async removeConfigFile(): Promise<this> {
+    await rm(this.configFile);
+    return this;
+  }
+
+  async pluginUsage(plugin: string, lastUsedAt: string, usageCount = 1): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    config.pluginUsage = {
+      ...config.pluginUsage,
+      [plugin]: { usageCount, lastUsedAt: new Date(lastUsedAt).getTime() },
+    };
+    await writeFile(this.configFile, JSON.stringify(config));
+    return this;
+  }
+
   async transcript(
     { project, session }: TranscriptLocation,
-    lines: TranscriptLine[],
+    lines: (TranscriptLine | string)[],
   ): Promise<this> {
     const file = join(this.path, "projects", encodeProjectDir(project), `${session}.jsonl`);
     await mkdir(dirname(file), { recursive: true });
-    const sessionLines = lines.map((line) => ({ sessionId: session, cwd: project, ...line }));
-    await writeFile(file, sessionLines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    const text = lines.map((line) =>
+      typeof line === "string" ? line : JSON.stringify({ sessionId: session, cwd: project, ...line }),
+    );
+    await writeFile(file, text.join("\n") + "\n");
     return this;
   }
 
@@ -187,13 +242,23 @@ export class FakeConfigDir {
   }
 }
 
-export async function fakeConfigDir(): Promise<FakeConfigDir> {
+export async function fakeConfigDir(options: FakeConfigDirOptions = {}): Promise<FakeConfigDir> {
   const root = await mkdtemp(join(tmpdir(), "declaw-"));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   const path = join(root, ".claude");
   await mkdir(path);
-  return new FakeConfigDir(path);
+  const configFile = join(options.configFileInConfigDir ? path : root, ".claude.json");
+  await writeFile(configFile, JSON.stringify(SENSITIVE_CONFIG_FILE_KEYS));
+  await writeJson(join(path, "plugins", "installed_plugins.json"), { version: 2, plugins: {} });
+  return new FakeConfigDir(path, configFile);
 }
+
+export const SENSITIVE_CONFIG_FILE_KEYS = {
+  oauthAccount: { accountUuid: "fake-account-uuid", emailAddress: "fake@example.com" },
+  userID: "fake-user-id",
+  machineID: "fake-machine-id",
+  mcpServers: { secret: { type: "http", url: "https://fake.example.com/mcp?token=fake-token" } },
+};
 
 const DEFAULT_CREATED_AT = "2026-09-01T00:00:00.000Z";
 

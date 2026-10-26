@@ -91,6 +91,39 @@ describe("report: Statuses", () => {
       "ux-writing": "unused",
     });
   });
+
+  it("marks an Installation Used when the per-skill counter knows a last Use before the period", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.skillUsage("orca-linear", "2026-08-14T12:00:00.000Z");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", periodStart),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "orca-linear", uses: 0, status: "used", recommended: false },
+    ]);
+  });
+
+  it("never calls an Installation Unused when only an unreadable source could know its last Use", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.plugin("switched-off@market", { skills: ["work"] });
+    await config.enabledPlugins({ "switched-off@market": false });
+    await config.corruptConfigFile();
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", periodStart),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "switched-off@market", lastUse: "unknown", status: "unknown", recommended: true },
+      { name: "orca-linear", lastUse: "unknown", status: "unknown", recommended: false },
+    ]);
+  });
 });
 
 function recommended(result: Report): string[] {

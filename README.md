@@ -19,9 +19,11 @@ npx declaw stats --json   # print the same Report as JSON
 
 declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set, otherwise from `~/.claude`, the same place Claude Code reads.
 
-The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used.
+The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used. A skill's last Use can still reach further back: declaw also reads the `skillUsage` counter in Claude Code's config file (`~/.claude.json`, or `.claude.json` inside `CLAUDE_CONFIG_DIR` when set). The counter never adds Uses to the period's count, and declaw reads no other key from that file.
 
-Each Installation is marked Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill), so there is not enough history to judge it. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
+These files are internal to Claude Code and can change without notice. Both outputs show the read status of each source (the plugin install records, the transcripts, and the skill counter): `readable`, `partial` (some lines or records were skipped), or `unreadable`. A number that depends on an unreadable source is shown as `unknown` instead of zero or `never`.
+
+Each Installation is marked Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill), so there is not enough history to judge it. When only an unreadable source could know an Installation's last Use, it is marked Unknown instead and never called Unused. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
 
 ## Development
 
