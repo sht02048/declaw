@@ -1,4 +1,5 @@
-import { writeFile } from "node:fs/promises";
+import { chmod, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { report } from "../../src/engine/index.js";
 import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
@@ -282,6 +283,89 @@ describe("report: read status of each data source", () => {
     });
     expect(result.installations).toEqual([
       { kind: "standalone-skill", name: "orca-linear", uses: 0, lastUse: "unknown" },
+    ]);
+  });
+
+  it("skips a counter record it cannot read and marks the counter partially readable", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.standaloneSkill("ux-writing");
+    await writeFile(
+      config.configFile,
+      JSON.stringify({
+        skillUsage: {
+          "orca-linear": { usageCount: 30, lastUsedAt: 1786708800000 },
+          "ux-writing": { usageCount: 2, lastUsedAt: "yesterday" },
+        },
+      }),
+    );
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.skillUsageCounter).toEqual({
+      status: "partial",
+      reason: "1 unreadable skillUsage record skipped",
+    });
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "orca-linear",
+        uses: 0,
+        lastUse: new Date("2026-08-14T12:00:00.000Z"),
+      },
+      { kind: "standalone-skill", name: "ux-writing", uses: 0, lastUse: "unknown" },
+    ]);
+  });
+
+  it("counts the other transcripts and marks transcripts partially readable when one cannot be opened", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("linear-ticket", "2026-10-08T09:00:00.000Z"),
+    ]);
+    await config.transcript({ project: "/work/app", session: "s2" }, [
+      skillToolCall("linear-ticket", "2026-10-09T09:00:00.000Z"),
+    ]);
+    await chmod(join(config.path, "projects", "-work-app", "s2.jsonl"), 0o000);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.transcripts).toEqual({
+      status: "partial",
+      reason: "1 transcript file could not be read",
+    });
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "linear-ticket",
+        uses: 1,
+        lastUse: new Date("2026-10-08T09:00:00.000Z"),
+      },
+    ]);
+  });
+
+  it("marks transcripts unreadable and shows Uses as unknown when they cannot be listed", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.standaloneSkill("ux-writing");
+    await config.skillUsage("orca-linear", "2026-08-14T12:00:00.000Z");
+    await writeFile(join(config.path, "projects"), "not a directory");
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.transcripts).toEqual({
+      status: "unreadable",
+      reason: "transcripts folder could not be read",
+    });
+    expect(result.period).toEqual({ start: null, end: now });
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "orca-linear",
+        uses: "unknown",
+        lastUse: new Date("2026-08-14T12:00:00.000Z"),
+      },
+      { kind: "standalone-skill", name: "ux-writing", uses: "unknown", lastUse: "unknown" },
     ]);
   });
 });
