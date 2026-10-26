@@ -41,6 +41,36 @@ describe("report: Statuses", () => {
     });
   });
 
+  it("keeps a Standalone Skill copied with old timestamps Too New, by its creation time", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("copied-skill", {
+      createdAt: "2026-10-20T00:00:00.000Z",
+      modifiedAt: "2025-01-01T00:00:00.000Z",
+    });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", periodStart),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "copied-skill", status: "too-new", installedAt: new Date("2026-10-20T00:00:00.000Z") },
+    ]);
+  });
+
+  it("falls back to a folder's modification time when the filesystem has no creation time", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("new-skill", { createdAt: null, modifiedAt: "2026-10-20T00:00:00.000Z" });
+    await config.standaloneSkill("old-skill", { createdAt: null, modifiedAt: "2026-09-01T00:00:00.000Z" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", periodStart),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(statuses(result)).toEqual({ "old-skill": "unused", "new-skill": "too-new" });
+  });
+
   it("judges a Linked Skill by the link's own time, not its target's", async () => {
     const config = await fakeConfigDir();
     await config.linkedSkill("new-link", {

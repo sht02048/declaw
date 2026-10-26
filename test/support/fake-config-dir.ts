@@ -2,6 +2,7 @@ import { lutimes, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } fro
 import { tmpdir } from "node:os";
 import { dirname, join, relative as relativePath } from "node:path";
 import { onTestFinished } from "vitest";
+import { setBirthTime } from "./birth-times.js";
 
 export type TranscriptLine = Record<string, unknown>;
 
@@ -149,10 +150,13 @@ export class FakeConfigDir {
     return dirname(this.path);
   }
 
-  async standaloneSkill(name: string, { createdAt = DEFAULT_CREATED_AT } = {}): Promise<this> {
+  async standaloneSkill(
+    name: string,
+    { createdAt = DEFAULT_CREATED_AT, modifiedAt }: { createdAt?: string | null; modifiedAt?: string } = {},
+  ): Promise<this> {
     const dir = join(this.path, "skills", name);
     await writeSkillFolder(dir, name);
-    await backdate(dir, createdAt);
+    await backdate(dir, createdAt, modifiedAt);
     return this;
   }
 
@@ -186,6 +190,7 @@ export class FakeConfigDir {
     const link = join(skillsDir, name);
     await symlink(relative ? relativePath(skillsDir, target) : target, link);
     await lutimes(link, new Date(createdAt), new Date(createdAt));
+    setBirthTime(link, new Date(createdAt));
     return this;
   }
 
@@ -291,9 +296,10 @@ export const SENSITIVE_CONFIG_FILE_KEYS = {
 
 const DEFAULT_CREATED_AT = "2026-09-01T00:00:00.000Z";
 
-async function backdate(path: string, createdAt: string): Promise<void> {
-  const at = new Date(createdAt);
-  await utimes(path, at, at);
+async function backdate(path: string, createdAt: string | null, modifiedAt = createdAt ?? undefined): Promise<void> {
+  const modified = new Date(modifiedAt ?? DEFAULT_CREATED_AT);
+  await utimes(path, modified, modified);
+  setBirthTime(path, createdAt === null ? null : new Date(createdAt));
 }
 
 async function writeSkillFolder(dir: string, name: string): Promise<void> {

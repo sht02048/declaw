@@ -53,9 +53,9 @@ async function findSyncedSkills(syncedDir: string): Promise<StandaloneSkillEntry
 
 async function createdAt(path: string): Promise<Date> {
   const { birthtimeMs, mtimeMs } = await lstat(path);
-  // Some Linux filesystems report no birth time (0), and a copy that preserved
-  // times can carry an mtime older than its birth time; the earlier one wins.
-  return new Date(birthtimeMs > 0 ? Math.min(birthtimeMs, mtimeMs) : mtimeMs);
+  // A copy that preserved times carries an old mtime, so mtime is only a stand-in
+  // on filesystems that report no birth time (0).
+  return new Date(birthtimeMs > 0 ? birthtimeMs : mtimeMs);
 }
 
 async function isLinkToFolder(entry: Dirent, path: string): Promise<boolean> {
