@@ -33,6 +33,16 @@ describe("TUI", () => {
     }
   });
 
+  it("says which data source could not be read", async () => {
+    const { config } = await exampleReport();
+    await config.corruptInstallRecords();
+    const result = await report({ configDir: config.path, now });
+
+    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} />);
+
+    expect(lastFrame()).toMatch(/Install records: unreadable \(.+\)/);
+  });
+
   it("selects the recommended set in one step", async () => {
     const { config, result } = await exampleReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);

@@ -8,7 +8,7 @@ import {
   type Plugin,
   type Report,
 } from "../engine/index.js";
-import { formatLastUse, formatPeriod, kindLabel, note, STATUS_LABELS } from "../cli/format.js";
+import { formatLastUse, formatPeriod, formatSources, kindLabel, note, STATUS_LABELS } from "../cli/format.js";
 
 export interface AppProps {
   report: Report;
@@ -73,6 +73,11 @@ export function App({ report, configDir, dryRun }: AppProps) {
   return (
     <Box flexDirection="column">
       <Text bold>{formatPeriod(report.period)}</Text>
+      {formatSources(report.sources, { problemsOnly: true }).map((line) => (
+        <Text key={line} color="yellow">
+          {line}
+        </Text>
+      ))}
       {screen === "list" ? (
         <List
           installations={installations}

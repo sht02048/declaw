@@ -33,10 +33,10 @@ export function formatPeriod({ start, end }: CoveredPeriod): string {
     : `Usage Stats from ${formatDate(start)} to ${formatDate(end)}`;
 }
 
-export function formatSources(sources: DataSources): string[] {
-  return (Object.keys(SOURCE_LABELS) as (keyof DataSources)[]).map(
-    (source) => `${SOURCE_LABELS[source]}: ${formatReadStatus(sources[source])}`,
-  );
+export function formatSources(sources: DataSources, { problemsOnly = false } = {}): string[] {
+  return (Object.keys(SOURCE_LABELS) as (keyof DataSources)[])
+    .filter((source) => !problemsOnly || sources[source].status !== "readable")
+    .map((source) => `${SOURCE_LABELS[source]}: ${formatReadStatus(sources[source])}`);
 }
 
 function formatReadStatus(read: ReadStatus): string {
