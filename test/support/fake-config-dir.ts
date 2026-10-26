@@ -15,6 +15,10 @@ export interface PluginFixture {
   version?: string;
   installedAt?: string;
   manifest?: JsonObject | null;
+  skills?: string[];
+  commands?: string[];
+  agents?: string[];
+  mcpServers?: JsonObject;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -32,6 +36,18 @@ export class FakeConfigDir {
     const manifest = fixture.manifest === undefined ? { name } : fixture.manifest;
     if (manifest !== null) {
       await writeJson(join(installPath, ".claude-plugin", "plugin.json"), manifest);
+    }
+    for (const skill of fixture.skills ?? []) {
+      await writeSkillFolder(join(installPath, "skills", skill), skill);
+    }
+    for (const command of fixture.commands ?? []) {
+      await writeMarkdown(join(installPath, "commands", `${command}.md`), command);
+    }
+    for (const agent of fixture.agents ?? []) {
+      await writeMarkdown(join(installPath, "agents", `${agent}.md`), agent);
+    }
+    if (fixture.mcpServers) {
+      await writeJson(join(installPath, ".mcp.json"), { mcpServers: fixture.mcpServers });
     }
 
     const scope = fixture.scope ?? "user";
@@ -102,6 +118,11 @@ async function writeSkillFolder(dir: string, name: string): Promise<void> {
     join(dir, "SKILL.md"),
     `---\nname: ${name}\ndescription: ${name} skill\n---\n\nDo the ${name} thing.\n`,
   );
+}
+
+async function writeMarkdown(file: string, name: string): Promise<void> {
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `---\nname: ${name}\ndescription: ${name}\n---\n\nDo the ${name} thing.\n`);
 }
 
 async function writeJson(file: string, value: unknown): Promise<void> {

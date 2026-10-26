@@ -48,4 +48,24 @@ describe("report: Plugin Inventory", () => {
       "forced-on@market": true,
     });
   });
+
+  it("finds Components in the plugin's default folders, namespaced by its manifest name", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("vercel@claude-plugins-official", {
+      skills: ["deploy", "env"],
+      commands: ["status"],
+      agents: ["ai-architect"],
+      mcpServers: { vercel: { type: "http", url: "https://mcp.vercel.com" } },
+    });
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]?.components).toEqual([
+      { kind: "skill", name: "vercel:deploy", uses: 0, lastUse: null },
+      { kind: "skill", name: "vercel:env", uses: 0, lastUse: null },
+      { kind: "command", name: "vercel:status", uses: 0, lastUse: null },
+      { kind: "agent", name: "vercel:ai-architect", uses: 0, lastUse: null },
+      { kind: "mcp-server", name: "vercel:vercel", uses: 0, lastUse: null },
+    ]);
+  });
 });

@@ -1,5 +1,5 @@
 import { findStandaloneSkills } from "./inventory.js";
-import { findPlugins } from "./plugins.js";
+import { findPlugins, type ComponentKind } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
@@ -20,12 +20,20 @@ export interface StandaloneSkill {
   lastUse: Date | null;
 }
 
+export interface Component {
+  kind: ComponentKind;
+  name: string;
+  uses: number;
+  lastUse: Date | null;
+}
+
 export interface Plugin {
   kind: "plugin";
   name: string;
   enabled: boolean;
   uses: number;
   lastUse: Date | null;
+  components: Component[];
 }
 
 export type Installation = Plugin | StandaloneSkill;
@@ -64,6 +72,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
         enabled: plugin.enabled,
         uses: 0,
         lastUse: null,
+        components: plugin.components.map((component) => ({ ...component, uses: 0, lastUse: null })),
       })),
       ...skills.map((skill): StandaloneSkill => ({
         kind: "standalone-skill",

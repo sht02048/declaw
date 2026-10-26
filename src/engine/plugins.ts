@@ -1,11 +1,20 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { listDir } from "./fs.js";
 
 type JsonObject = Record<string, unknown>;
+
+export type ComponentKind = "skill" | "command" | "agent" | "mcp-server";
+
+export interface ComponentEntry {
+  kind: ComponentKind;
+  name: string;
+}
 
 export interface PluginEntry {
   key: string;
   enabled: boolean;
+  components: ComponentEntry[];
 }
 
 export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
@@ -23,9 +32,57 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const manifest = await readJson(join(record.installPath, ".claude-plugin", "plugin.json"));
     const setting = enabledPlugins[key];
     const enabled = typeof setting === "boolean" ? setting : manifest?.defaultEnabled !== false;
-    plugins.push({ key, enabled });
+    const namespace = typeof manifest?.name === "string" ? manifest.name : pluginName(key);
+    const components = await findComponents(record.installPath, namespace);
+    plugins.push({ key, enabled, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+async function findComponents(root: string, namespace: string): Promise<ComponentEntry[]> {
+  const named = (kind: ComponentKind, names: string[]): ComponentEntry[] =>
+    [...new Set(names)].sort().map((name) => ({ kind, name: `${namespace}:${name}` }));
+
+  return [
+    ...named("skill", await skillsIn(join(root, "skills"))),
+    ...named("command", await markdownNamesIn(join(root, "commands"))),
+    ...named("agent", await markdownNamesIn(join(root, "agents"))),
+    ...named("mcp-server", await mcpServerKeysIn(join(root, ".mcp.json"))),
+  ];
+}
+
+async function skillsIn(dir: string): Promise<string[]> {
+  const names: string[] = [];
+  for (const entry of await listDir(dir)) {
+    if (await exists(join(dir, entry.name, "SKILL.md"))) names.push(entry.name);
+  }
+  return names;
+}
+
+async function markdownNamesIn(dir: string): Promise<string[]> {
+  return (await listDir(dir))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => basename(entry.name, ".md"));
+}
+
+async function mcpServerKeysIn(file: string): Promise<string[]> {
+  const config = await readJson(file);
+  return Object.keys(asObject(config?.mcpServers));
+}
+
+function pluginName(key: string): string {
+  const at = key.lastIndexOf("@");
+  return at > 0 ? key.slice(0, at) : key;
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 async function readJson(file: string): Promise<JsonObject | null> {
