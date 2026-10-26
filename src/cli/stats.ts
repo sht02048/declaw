@@ -1,48 +1,11 @@
-import type { DataSources, Installation, ReadStatus, Report, Status } from "../engine/index.js";
+import type { Report } from "../engine/index.js";
+import { formatLastUse, formatPeriod, formatSources, kindLabel, note, STATUS_LABELS } from "./format.js";
 
 export function formatStatsJson(report: Report): string {
   return JSON.stringify(report, null, 2) + "\n";
 }
 
-const SOURCE_LABELS: Record<keyof DataSources, string> = {
-  installRecords: "Install records",
-  transcripts: "Transcripts",
-  skillUsageCounter: "Skill usage counter",
-};
-
-const KIND_LABELS: Record<Installation["kind"], string> = {
-  plugin: "Plugin",
-  "standalone-skill": "Standalone Skill",
-};
-
-function kindLabel(installation: Installation): string {
-  if (installation.kind === "plugin") return KIND_LABELS.plugin;
-  if (installation.linked) return "Linked Skill";
-  if (installation.synced) return "Synced Skill";
-  return KIND_LABELS[installation.kind];
-}
-
-const STATUS_LABELS: Record<Status, string> = {
-  unused: "Unused",
-  used: "Used",
-  "too-new": "Too New",
-  unknown: "Unknown",
-};
-
-function note(installation: Installation): string {
-  if (installation.kind === "plugin") return installation.enabled ? "" : "disabled";
-  if (installation.linked) return `links to ${installation.linked.target}`;
-  if (installation.synced) return "managed by claude.ai";
-  return "";
-}
-
 export function formatStatsText(report: Report): string {
-  const { start, end } = report.period;
-  const header =
-    start === null
-      ? "Usage Stats: no transcripts found, so no Uses are known yet"
-      : `Usage Stats from ${formatDate(start)} to ${formatDate(end)}`;
-
   const rows = [
     ["", "STATUS", "KIND", "NAME", "USES", "LAST USE", "HOOKS", "NOTE"],
     ...report.installations.map((installation) => [
@@ -64,23 +27,13 @@ export function formatStatsText(report: Report): string {
       .trimEnd(),
   );
 
-  const sources = (Object.keys(SOURCE_LABELS) as (keyof DataSources)[]).map(
-    (source) => `${SOURCE_LABELS[source]}: ${formatReadStatus(report.sources[source])}`,
-  );
-
-  return [header, ...sources, "", ...table, "", "* recommended for Cleanup", ""].join("\n");
-}
-
-function formatReadStatus(read: ReadStatus): string {
-  return read.status === "readable" ? read.status : `${read.status} (${read.reason})`;
-}
-
-function formatLastUse(lastUse: Installation["lastUse"]): string {
-  if (lastUse === null) return "never";
-  if (lastUse === "unknown") return lastUse;
-  return formatDate(lastUse);
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return [
+    formatPeriod(report.period),
+    ...formatSources(report.sources),
+    "",
+    ...table,
+    "",
+    "* recommended for Cleanup",
+    "",
+  ].join("\n");
 }
