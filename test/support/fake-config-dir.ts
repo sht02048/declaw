@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { onTestFinished } from "vitest";
@@ -14,12 +14,22 @@ export class FakeConfigDir {
   constructor(readonly path: string) {}
 
   async standaloneSkill(name: string): Promise<this> {
-    const dir = join(this.path, "skills", name);
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      join(dir, "SKILL.md"),
-      `---\nname: ${name}\ndescription: ${name} skill\n---\n\nDo the ${name} thing.\n`,
-    );
+    await writeSkillFolder(join(this.path, "skills", name), name);
+    return this;
+  }
+
+  async linkedSkill(name: string): Promise<this> {
+    const target = join(dirname(this.path), ".agents", "skills", name);
+    await writeSkillFolder(target, name);
+    await mkdir(join(this.path, "skills"), { recursive: true });
+    await symlink(target, join(this.path, "skills", name));
+    return this;
+  }
+
+  async syncedSkill(name: string, account = "org_account"): Promise<this> {
+    const accountDir = join(this.path, "skills", "synced", account);
+    await writeSkillFolder(join(accountDir, name), name);
+    await writeFile(join(accountDir, "manifest.json"), JSON.stringify({ skills: [name] }));
     return this;
   }
 
@@ -36,9 +46,19 @@ export class FakeConfigDir {
 }
 
 export async function fakeConfigDir(): Promise<FakeConfigDir> {
-  const path = await mkdtemp(join(tmpdir(), "declaw-config-"));
-  onTestFinished(() => rm(path, { recursive: true, force: true }));
+  const root = await mkdtemp(join(tmpdir(), "declaw-"));
+  onTestFinished(() => rm(root, { recursive: true, force: true }));
+  const path = join(root, ".claude");
+  await mkdir(path);
   return new FakeConfigDir(path);
+}
+
+async function writeSkillFolder(dir: string, name: string): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, "SKILL.md"),
+    `---\nname: ${name}\ndescription: ${name} skill\n---\n\nDo the ${name} thing.\n`,
+  );
 }
 
 function encodeProjectDir(cwd: string): string {
