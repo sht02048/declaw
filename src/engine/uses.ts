@@ -1,4 +1,4 @@
-import type { TranscriptEntry } from "./transcripts.js";
+import type { TranscriptLine } from "./transcripts.js";
 
 export type UseKind = "invoke" | "agent" | "mcp";
 
@@ -10,18 +10,18 @@ export interface Use {
 
 const AGENT_TOOLS = new Set(["Agent", "Task"]);
 
-export function entryTimestamp(entry: TranscriptEntry): Date | null {
-  if (typeof entry.timestamp !== "string") return null;
-  const at = new Date(entry.timestamp);
+export function lineTimestamp(line: TranscriptLine): Date | null {
+  if (typeof line.timestamp !== "string") return null;
+  const at = new Date(line.timestamp);
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
-export function usesIn(entry: TranscriptEntry): Use[] {
-  const at = entryTimestamp(entry);
+export function usesIn(line: TranscriptLine): Use[] {
+  const at = lineTimestamp(line);
   if (at === null) return [];
-  const content = (entry.message as { content?: unknown } | undefined)?.content;
-  if (entry.type === "user") return slashCommandsIn(content, at);
-  if (entry.type !== "assistant" || !Array.isArray(content)) return [];
+  const content = (line.message as { content?: unknown } | undefined)?.content;
+  if (line.type === "user") return slashCommandsIn(content, at);
+  if (line.type !== "assistant" || !Array.isArray(content)) return [];
   const uses: Use[] = [];
   for (const block of content) {
     if (block?.type !== "tool_use") continue;

@@ -1,5 +1,5 @@
-import type { StandaloneSkillEntry } from "./inventory.js";
-import type { ComponentEntry, ComponentKind, PluginEntry } from "./plugins.js";
+import type { StandaloneSkillRecord } from "./inventory.js";
+import type { ComponentRecord, ComponentKind, PluginRecord } from "./plugins.js";
 import type { Use, UseKind } from "./uses.js";
 
 export interface UsageTally {
@@ -23,7 +23,7 @@ export class UsageLedger {
   private readonly tallies = new Map<string, UsageTally>();
   private readonly mcpPrefixes: McpServerPrefix[] = [];
 
-  constructor(plugins: PluginEntry[], skills: StandaloneSkillEntry[]) {
+  constructor(plugins: PluginRecord[], skills: StandaloneSkillRecord[]) {
     for (const skill of skills) this.open("invoke", skill.name);
     for (const plugin of plugins) {
       for (const component of plugin.components === "unknown" ? [] : plugin.components) {
@@ -46,7 +46,7 @@ export class UsageLedger {
     return { ...this.tallies.get(key("invoke", name))! };
   }
 
-  component(component: ComponentEntry): UsageTally {
+  component(component: ComponentRecord): UsageTally {
     return { ...this.tallies.get(key(USE_KIND_OF[component.kind], component.name))! };
   }
 
@@ -54,7 +54,7 @@ export class UsageLedger {
     if (!this.tallies.has(key(kind, name))) this.tallies.set(key(kind, name), { uses: 0, lastUse: null });
   }
 
-  private addMcpServer(plugin: PluginEntry, component: ComponentEntry): void {
+  private addMcpServer(plugin: PluginRecord, component: ComponentRecord): void {
     const server = component.name.slice(plugin.namespace.length + 1);
     const pluginNames = new Set([plugin.namespace, pluginNameOf(plugin.key)]);
     for (const pluginName of pluginNames) {

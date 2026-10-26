@@ -5,7 +5,7 @@ import { isSkillFolder, listDir } from "./fs.js";
 const SYNCED_SKILLS_DIR = "synced";
 const SYNCED_SKILLS_NAMESPACE = "anthropic-skills";
 
-export interface StandaloneSkillEntry {
+export interface StandaloneSkillRecord {
   name: string;
   path: string;
   createdAt: Date;
@@ -13,37 +13,37 @@ export interface StandaloneSkillEntry {
   synced?: true;
 }
 
-export async function findStandaloneSkills(configDir: string): Promise<StandaloneSkillEntry[]> {
+export async function findStandaloneSkills(configDir: string): Promise<StandaloneSkillRecord[]> {
   const skillsDir = join(configDir, "skills");
-  const skills: StandaloneSkillEntry[] = [];
-  for (const entry of await listDir(skillsDir)) {
-    if (entry.name === SYNCED_SKILLS_DIR || entry.name.startsWith(".")) continue;
-    const path = join(skillsDir, entry.name);
-    if (entry.isDirectory()) {
+  const skills: StandaloneSkillRecord[] = [];
+  for (const dirent of await listDir(skillsDir)) {
+    if (dirent.name === SYNCED_SKILLS_DIR || dirent.name.startsWith(".")) continue;
+    const path = join(skillsDir, dirent.name);
+    if (dirent.isDirectory()) {
       if (!(await isSkillFolder(path))) continue;
-      skills.push({ name: entry.name, path, createdAt: await createdAt(path) });
-    } else if (entry.isSymbolicLink()) {
+      skills.push({ name: dirent.name, path, createdAt: await createdAt(path) });
+    } else if (dirent.isSymbolicLink()) {
       const linkTo = await linkTargetOf(path);
       if (linkTo === "not a skill") continue;
       const target = resolve(skillsDir, await readlink(path));
       const linked = linkTo === "missing" ? { target, broken: true as const } : { target };
-      skills.push({ name: entry.name, path, createdAt: await createdAt(path), linked });
+      skills.push({ name: dirent.name, path, createdAt: await createdAt(path), linked });
     }
   }
   skills.push(...(await findSyncedSkills(join(skillsDir, SYNCED_SKILLS_DIR))));
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function findSyncedSkills(syncedDir: string): Promise<StandaloneSkillEntry[]> {
-  const skills: StandaloneSkillEntry[] = [];
+async function findSyncedSkills(syncedDir: string): Promise<StandaloneSkillRecord[]> {
+  const skills: StandaloneSkillRecord[] = [];
   for (const account of await listDir(syncedDir)) {
     if (!account.isDirectory()) continue;
     const accountDir = join(syncedDir, account.name);
-    for (const entry of await listDir(accountDir)) {
-      const path = join(accountDir, entry.name);
-      if (!entry.isDirectory() || !(await isSkillFolder(path))) continue;
+    for (const dirent of await listDir(accountDir)) {
+      const path = join(accountDir, dirent.name);
+      if (!dirent.isDirectory() || !(await isSkillFolder(path))) continue;
       skills.push({
-        name: `${SYNCED_SKILLS_NAMESPACE}:${entry.name}`,
+        name: `${SYNCED_SKILLS_NAMESPACE}:${dirent.name}`,
         path,
         createdAt: await createdAt(path),
         synced: true,

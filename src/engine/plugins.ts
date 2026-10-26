@@ -16,25 +16,25 @@ import {
 
 export type ComponentKind = "skill" | "command" | "agent" | "mcp-server";
 
-export interface ComponentEntry {
+export interface ComponentRecord {
   kind: ComponentKind;
   name: string;
 }
 
-export interface PluginEntry {
+export interface PluginRecord {
   key: string;
   namespace: string;
   installedAt: Date | null;
   enabled: boolean | Unknown;
   hooks: number | Unknown;
-  components: ComponentEntry[] | Unknown;
+  components: ComponentRecord[] | Unknown;
 }
 
 export interface PluginInventory {
   installRecords: ReadStatus;
   settings: ReadStatus;
   pluginFiles: ReadStatus;
-  plugins: PluginEntry[];
+  plugins: PluginRecord[];
 }
 
 export async function findPlugins(configDir: string): Promise<PluginInventory> {
@@ -60,7 +60,7 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
   );
   const marketplaces = knownMarketplaces.value === undefined ? null : (knownMarketplaces.value ?? {});
 
-  const plugins: PluginEntry[] = [];
+  const plugins: PluginRecord[] = [];
   for (const [key, scopes] of Object.entries(records)) {
     const record = (Array.isArray(scopes) ? scopes : [])
       .map(asObject)
@@ -138,8 +138,8 @@ async function findComponents(
   root: string,
   namespace: string,
   manifest: JsonObject,
-): Promise<ComponentEntry[]> {
-  const named = (kind: ComponentKind, names: string[]): ComponentEntry[] =>
+): Promise<ComponentRecord[]> {
+  const named = (kind: ComponentKind, names: string[]): ComponentRecord[] =>
     [...new Set(names)].sort().map((name) => ({ kind, name: `${namespace}:${name}` }));
 
   const skillDirs = [join(root, "skills"), ...pathsIn(root, manifest.skills)];
@@ -168,8 +168,8 @@ async function collect(paths: string[], find: (path: string) => Promise<string[]
 async function skillsIn(dir: string): Promise<string[]> {
   if (await isSkillFolder(dir)) return [basename(dir)];
   const names: string[] = [];
-  for (const entry of await listDir(dir)) {
-    if (await isSkillFolder(join(dir, entry.name))) names.push(entry.name);
+  for (const dirent of await listDir(dir)) {
+    if (await isSkillFolder(join(dir, dirent.name))) names.push(dirent.name);
   }
   return names;
 }
@@ -177,8 +177,8 @@ async function skillsIn(dir: string): Promise<string[]> {
 async function markdownNamesIn(path: string): Promise<string[]> {
   if (path.endsWith(".md")) return (await exists(path)) ? [basename(path, ".md")] : [];
   return (await listDir(path))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
-    .map((entry) => basename(entry.name, ".md"));
+    .filter((dirent) => dirent.isFile() && dirent.name.endsWith(".md"))
+    .map((dirent) => basename(dirent.name, ".md"));
 }
 
 async function mcpServerKeys(root: string, declared: unknown): Promise<string[]> {

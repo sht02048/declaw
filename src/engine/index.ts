@@ -1,11 +1,11 @@
 import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
-import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
+import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
 import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
 import { judge, sortForCleanup, type Status } from "./statuses.js";
 import { findTranscripts, readTranscript } from "./transcripts.js";
-import { entryTimestamp, usesIn } from "./uses.js";
+import { lineTimestamp, usesIn } from "./uses.js";
 
 export type { ReadStatus, Unknown } from "./read-status.js";
 export type { Status } from "./statuses.js";
@@ -131,7 +131,7 @@ export async function report({
 }
 
 function pluginInstallation(
-  plugin: PluginEntry,
+  plugin: PluginRecord,
   usageOf: (inPeriod: UsageTally | null, counterKey: string | null) => Usage,
   transcripts: TranscriptUsage,
 ): Omit<Plugin, "status" | "recommended"> {
@@ -199,10 +199,10 @@ async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Prom
 
   for (const file of files) {
     try {
-      for await (const entry of readTranscript(file, () => skippedLines++)) {
-        const at = entryTimestamp(entry);
+      for await (const line of readTranscript(file, () => skippedLines++)) {
+        const at = lineTimestamp(line);
         if (at !== null && (start === null || at < start)) start = at;
-        for (const use of usesIn(entry)) ledger.record(use);
+        for (const use of usesIn(line)) ledger.record(use);
       }
     } catch {
       unreadableFiles += 1;

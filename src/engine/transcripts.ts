@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { listDir } from "./fs.js";
 
-export type TranscriptEntry = Record<string, unknown>;
+export type TranscriptLine = Record<string, unknown>;
 
 export async function findTranscripts(configDir: string): Promise<string[]> {
   const projectsDir = join(configDir, "projects");
@@ -24,28 +24,28 @@ export async function findTranscripts(configDir: string): Promise<string[]> {
 
 async function jsonlFilesIn(dir: string): Promise<string[]> {
   return (await listDir(dir))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-    .map((entry) => join(dir, entry.name));
+    .filter((dirent) => dirent.isFile() && dirent.name.endsWith(".jsonl"))
+    .map((dirent) => join(dir, dirent.name));
 }
 
 export async function* readTranscript(
   file: string,
   onUnparsableLine: () => void,
-): AsyncGenerator<TranscriptEntry> {
+): AsyncGenerator<TranscriptLine> {
   const lines = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
   for await (const line of lines) {
     if (line.trim() === "") continue;
-    const entry = parseLine(line);
-    if (entry === null) onUnparsableLine();
-    else yield entry;
+    const parsed = parseLine(line);
+    if (parsed === null) onUnparsableLine();
+    else yield parsed;
   }
 }
 
-function parseLine(line: string): TranscriptEntry | null {
+function parseLine(line: string): TranscriptLine | null {
   try {
-    const entry: unknown = JSON.parse(line);
-    return typeof entry === "object" && entry !== null && !Array.isArray(entry)
-      ? (entry as TranscriptEntry)
+    const value: unknown = JSON.parse(line);
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as TranscriptLine)
       : null;
   } catch {
     return null;

@@ -177,18 +177,18 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
           return state;
       }
     }
-    const entries = entriesOf(installations, state.expanded);
-    const current = installations[entries[state.cursor]?.index ?? -1];
+    const listRows = listRowsOf(installations, state.expanded);
+    const current = installations[listRows[state.cursor]?.index ?? -1];
     switch (action.type) {
       case "up":
         return { ...state, cursor: Math.max(0, state.cursor - 1) };
       case "down":
-        return { ...state, cursor: Math.min(entries.length - 1, state.cursor + 1) };
+        return { ...state, cursor: Math.min(listRows.length - 1, state.cursor + 1) };
       case "expand": {
         if (!current) return state;
         const expanded = withName(state.expanded, current.name, action.open);
-        const row = entriesOf(installations, expanded).findIndex(
-          (entry) => installations[entry.index] === current && !isChild(entry),
+        const row = listRowsOf(installations, expanded).findIndex(
+          (listRow) => installations[listRow.index] === current && !isChild(listRow),
         );
         return { ...state, expanded, cursor: row };
       }
@@ -233,14 +233,14 @@ interface Body {
   focusEnd?: number;
 }
 
-interface Entry {
+interface ListRow {
   index: number;
   component?: number;
   hooks?: true;
 }
 
-function entriesOf(installations: Installation[], expanded: ReadonlySet<string>): Entry[] {
-  return installations.flatMap((installation, index): Entry[] => {
+function listRowsOf(installations: Installation[], expanded: ReadonlySet<string>): ListRow[] {
+  return installations.flatMap((installation, index): ListRow[] => {
     if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
     const count = Math.max(1, installation.components.length);
     return [
@@ -251,8 +251,8 @@ function entriesOf(installations: Installation[], expanded: ReadonlySet<string>)
   });
 }
 
-function isChild(entry: Entry | undefined): boolean {
-  return entry?.component !== undefined || entry?.hooks === true;
+function isChild(listRow: ListRow | undefined): boolean {
+  return listRow?.component !== undefined || listRow?.hooks === true;
 }
 
 function listLines(
@@ -268,21 +268,21 @@ function listLines(
       installation.kind === "plugin" ? columnWidths(installation.components.map(componentCells)) : [],
     ]),
   );
-  const entries = entriesOf(installations, expanded);
-  const lines = entries.map((entry, line): Line => {
-    const installation = installations[entry.index]!;
+  const listRows = listRowsOf(installations, expanded);
+  const lines = listRows.map((listRow, line): Line => {
+    const installation = installations[listRow.index]!;
     const onCursor = line === cursor;
     const marker = onCursor ? ">" : " ";
     const style = onCursor ? { style: "cursor" as const } : { style: "dim" as const };
-    if (entry.hooks && installation.kind === "plugin") {
+    if (listRow.hooks && installation.kind === "plugin") {
       return {
         key: `${installation.name} hooks`,
         text: `${marker}       ${formatHooksPerSession(installation.hooks)}`,
         ...style,
       };
     }
-    if (entry.component !== undefined) {
-      const component = installation.kind === "plugin" ? installation.components[entry.component] : undefined;
+    if (listRow.component !== undefined) {
+      const component = installation.kind === "plugin" ? installation.components[listRow.component] : undefined;
       const text = component
         ? alignRow(componentCells(component), componentWidths.get(installation)!)
         : "no Components found";
@@ -305,8 +305,8 @@ function listLines(
     };
   });
   let focusEnd = cursor;
-  if (!isChild(entries[cursor])) {
-    while (isChild(entries[focusEnd + 1])) focusEnd += 1;
+  if (!isChild(listRows[cursor])) {
+    while (isChild(listRows[focusEnd + 1])) focusEnd += 1;
   }
   return { lines, focus: cursor, focusEnd };
 }
