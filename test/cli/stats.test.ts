@@ -31,6 +31,7 @@ async function runCli(argv: string[], env: Record<string, string>, homeDir = "/n
     now: () => now,
     stdout: (text) => (stdout += text),
     stderr: (text) => (stderr += text),
+    interactive: () => Promise.reject(new Error("stats must not open the interactive list")),
   });
   return { exitCode, stdout, stderr };
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { run } from "./cli/main.js";
+import { runInteractive } from "./tui/index.js";
 
 process.exitCode = await run(process.argv.slice(2), {
   env: process.env,
@@ -8,4 +9,5 @@ process.exitCode = await run(process.argv.slice(2), {
   now: () => new Date(),
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
+  interactive: runInteractive,
 });
