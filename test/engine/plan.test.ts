@@ -35,18 +35,20 @@ describe("planCleanup", () => {
 
   it("plans removing only the link for a Linked Skill, keeping its target", async () => {
     const config = await fakeConfigDir();
-    const target = join(config.home, ".agents", "skills", "find-skills");
+    const target = join(config.home, "My Skills", "it's-mine");
     await config.linkedSkill("find-skills", { target });
     const result = await report({ configDir: config.path, now });
 
     const plan = planCleanup(named(result, "find-skills"), { configDir: config.path });
 
+    const path = join(config.path, "skills", "find-skills");
     expect(plan).toEqual([
       {
         kind: "remove-link",
         name: "find-skills",
-        path: join(config.path, "skills", "find-skills"),
+        path,
         target,
+        relinkCommand: `ln -s '${join(config.home, "My Skills", "it'\\''s-mine")}' '${path}'`,
       },
     ]);
   });

@@ -13,6 +13,7 @@ export interface RemoveLink {
   name: string;
   path: string;
   target: string;
+  relinkCommand: string;
 }
 
 export interface MoveToTrash {
@@ -43,8 +44,19 @@ export function planCleanup(selection: Installation[], { configDir }: PlanOption
     }
     const path = join(configDir, "skills", installation.name);
     if (installation.linked) {
-      return { kind: "remove-link", name: installation.name, path, target: installation.linked.target };
+      const { target } = installation.linked;
+      return {
+        kind: "remove-link",
+        name: installation.name,
+        path,
+        target,
+        relinkCommand: `ln -s ${shellQuote(target)} ${shellQuote(path)}`,
+      };
     }
     return { kind: "move-to-trash", name: installation.name, path };
   });
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }

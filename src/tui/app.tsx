@@ -323,7 +323,7 @@ function undo(action: PlannedAction): string {
     case "uninstall-plugin":
       return action.reinstallCommand;
     case "remove-link":
-      return `ln -s ${action.target} ${action.path}`;
+      return action.relinkCommand;
     case "move-to-trash":
       return "restore it from the system trash";
   }

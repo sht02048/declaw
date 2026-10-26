@@ -208,7 +208,7 @@ describe("TUI confirmation screen", () => {
     );
     expect(frame).toContain(
       `find-skills Remove the link only, keeping ${target} ` +
-        `Undo: ln -s ${target} ${join(config.path, "skills", "find-skills")}`,
+        `Undo: ln -s '${target}' '${join(config.path, "skills", "find-skills")}'`,
     );
     expect(frame).toContain(
       `ux-writing Move ${join(config.path, "skills", "ux-writing")} to the system trash ` +
