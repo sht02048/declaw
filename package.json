@@ -23,6 +23,9 @@
     "linux"
   ],
   "scripts": {
+    "start": "npm run build --silent && node dist/cli.js",
+    "stats": "npm start --silent -- stats",
+    "dry-run": "npm start --silent -- --dry-run",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -37,9 +40,9 @@
     "vitest": "^4.1.12"
   },
   "dependencies": {
+    "@inkjs/ui": "^2.0.0",
     "ink": "^8.0.0",
     "react": "^19.3.1",
-    "trash": "^10.1.1",
-    "wrap-ansi": "^10.0.2"
+    "trash": "^10.1.1"
   }
 }

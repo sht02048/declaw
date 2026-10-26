@@ -19,7 +19,9 @@ npx declaw stats          # print Usage Stats as a table
 npx declaw stats --json   # print the same Report as JSON
 ```
 
-`declaw` lists every Installation with its Usage Stats under the covered period. Move with the arrow keys, select with space, press `r` to select the recommended set, and press right or left to expand or collapse a Plugin's per-Component Uses. Each Plugin shows how many hooks it runs every session. Synced Skills are listed but cannot be selected. Enter opens a confirmation screen that shows, for each selection, what will happen and how to undo it:
+`declaw` opens a full-screen list of every Installation under the covered period, grouped by Usage Status, with the number of Installations per Usage Status, how many are recommended, and how many are selected. Each row shows the kind, the Uses in the covered period, how long ago the last Use was, and for a Plugin how many hooks it runs every session. Every line fits on one terminal row: long names end in an ellipsis, and narrow terminals drop the hooks column and then the kind column. A panel under the list describes the Installation under the cursor: its Usage Status and why, when it was installed, where a Linked Skill links to, and what a Cleanup would do to it.
+
+Move with the arrow keys, select with space (`◉` selected, `○` not selected), press `r` to select the recommended set (marked `★`), and press right or left to expand or collapse a Plugin's per-Component Uses. Synced Skills are listed with `·` and cannot be selected. Enter opens a confirmation screen that groups the selection by what will happen, then lists how to undo each:
 
 | Installation | What happens | Undo |
 |---|---|---|
@@ -27,7 +29,7 @@ npx declaw stats --json   # print the same Report as JSON
 | Linked Skill | the link is removed; its target is kept | recreate the link with `ln -s` |
 | Standalone Skill | its folder moves to the system trash | restore it from the trash |
 
-Esc goes back to the list without changing anything, and q quits. Press y on the confirmation screen to run the Cleanup. One failure does not stop the rest, and a summary then lists each Installation as removed or failed, with the reason for a failure (a failed uninstall's output as-is), followed by how to undo each removal. With `--dry-run` the confirmation screen is the end and y does nothing. There is no flag that skips the confirmation screen.
+Esc goes back to the list without changing anything, and q quits. Press y on the confirmation screen to run the Cleanup. One failure does not stop the rest, and a summary then marks each Installation removed (`✔`) or failed (`✖`), with the reason for a failure (a failed uninstall's output as-is), followed by how to undo each removal. After you quit, the same summary is printed to the terminal, so the undo commands stay in your scrollback. With `--dry-run` the confirmation screen is the end and y does nothing. There is no flag that skips the confirmation screen.
 
 declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set, otherwise from `~/.claude`, the same place Claude Code reads.
 
@@ -37,9 +39,18 @@ These files are internal to Claude Code and can change without notice. Both outp
 
 A Standalone Skill is a folder in the skills folder that holds a `SKILL.md`; other folders and dot-folders are left out. A Linked Skill whose target no longer exists is still listed, flagged as a broken link.
 
-Each Installation's Usage Status is Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill; the modification time stands in only where the filesystem records no creation time), so there is not enough history to judge it. When only an unreadable source could know an Installation's last Use, it is marked Unknown instead and never called Unused. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
+Each Installation's Usage Status is Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill; the modification time stands in only where the filesystem records no creation time), so there is not enough history to judge it. When only an unreadable source could know an Installation's last Use, it is marked Unknown instead and never called Unused. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first; the interactive list keeps that order within its groups, which run Unused, Used, Too New, then Unknown. Installations marked `★` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
 
 ## Development
+
+To run declaw from a clone, each of these builds first:
+
+```sh
+npm start                  # interactive Cleanup, same as `declaw`
+npm run dry-run            # interactive, ending at the confirmation screen
+npm run stats              # Usage Stats table
+npm start -- stats --json  # pass any other arguments after --
+```
 
 ```sh
 npm install          # install dev dependencies

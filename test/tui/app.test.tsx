@@ -7,6 +7,7 @@ import { fakeConfigDir, skillToolCall, userPrompt } from "../support/fake-config
 import { fakeClaude, fakeTrash } from "../support/fake-effects.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
+const TITLE = "declaw  Usage Stats 2026-09-28 – 2026-10-26 · 29 days";
 
 async function exampleReport() {
   const config = await fakeConfigDir();
@@ -25,10 +26,10 @@ describe("TUI", () => {
   it("renders the list of Installations under the covered period", async () => {
     const { config, result } = await exampleReport();
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const frame = lastFrame()!;
-    expect(frame.split("\n")[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(frame.split("\n")[0]).toBe(TITLE);
     for (const name of ["vercel@market", "idle@market", "ux-writing", "anthropic-skills:brand-voice"]) {
       expect(frame).toContain(name);
     }
@@ -39,14 +40,14 @@ describe("TUI", () => {
     await config.corruptInstallRecords();
     const result = await report({ ...config.paths, now });
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     expect(lastFrame()).toMatch(/Install records: unreadable \(.+\)/);
   });
 
   it("selects the recommended set in one step", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r");
 
@@ -55,7 +56,7 @@ describe("TUI", () => {
 
   it("toggles the Installation under the cursor", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, DOWN, " ", DOWN, " ");
 
@@ -64,27 +65,27 @@ describe("TUI", () => {
 
   it("shows a Synced Skill but never selects it", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, " ");
 
     const row = lastFrame()!.split("\n").find((line) => line.includes("anthropic-skills:brand-voice"))!;
-    expect(row).toContain("managed by claude.ai");
-    expect(row).not.toContain("[x]");
+    expect(row).toContain("synced");
+    expect(row).not.toContain("◉");
     expect(selected(lastFrame()!)).toEqual([]);
   });
 
   it("expands a Plugin to show Uses per Component, and collapses it again", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, DOWN, DOWN, RIGHT);
 
     const lines = lastFrame()!.split("\n");
-    const component = (name: string) => lines.find((line) => line.includes(name))?.split(/\s+/).filter(Boolean);
-    expect(component("vercel:deploy")).toEqual(["skill", "vercel:deploy", "1", "2026-10-09"]);
-    expect(component("vercel:logs")).toEqual(["skill", "vercel:logs", "0", "never"]);
-    expect(component("vercel:deployer")).toEqual(["agent", "vercel:deployer", "0", "never"]);
+    const component = (name: string) => lines.find((line) => line.includes(name))?.trim().split(/\s{2,}/);
+    expect(component("vercel:deploy")).toEqual(["├─ vercel:deploy", "skill", "1", "2w ago"]);
+    expect(component("vercel:logs")).toEqual(["├─ vercel:logs", "skill", "0", "never"]);
+    expect(component("vercel:deployer")).toEqual(["├─ vercel:deployer", "agent", "0", "never"]);
 
     await press(stdin, LEFT);
 
@@ -105,11 +106,11 @@ describe("TUI hook counts", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const row = (name: string) => lastFrame()!.split("\n").find((line) => line.includes(name));
-    expect(row("hooked@market")).toMatch(/\s2 hooks(\s|$)/);
-    expect(row("quiet@market")).toMatch(/\s0 hooks(\s|$)/);
+    expect(row("hooked@market")).toMatch(/\s2$/);
+    expect(row("quiet@market")).toMatch(/\s0$/);
 
     await press(stdin, RIGHT);
 
@@ -126,7 +127,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -134,8 +135,8 @@ describe("TUI in a short terminal", () => {
 
     const lines = lastFrame()!.split("\n");
     expect(lines.length).toBeLessThanOrEqual(12);
-    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
-    expect(lines.find((line) => line.startsWith(">"))).toContain("skill-19");
+    expect(lines[0]).toBe(TITLE);
+    expect(lines.find((line) => line.startsWith("›"))).toContain("skill-19");
     expect(lastFrame()).not.toContain("skill-00");
   });
 
@@ -149,7 +150,7 @@ describe("TUI in a short terminal", () => {
       skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -159,11 +160,11 @@ describe("TUI in a short terminal", () => {
 
     const lines = lastFrame()!.split("\n");
     expect(lines.length).toBeLessThanOrEqual(12);
-    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(lines[0]).toBe(TITLE);
     expect(lastFrame()).toContain("big:f");
   });
 
-  it("fits a confirmation screen whose long paths wrap at word boundaries", async () => {
+  it("fits a confirmation screen with long paths, one terminal row per line", async () => {
     const config = await fakeConfigDir();
     for (let index = 0; index < 6; index++) {
       const folder = `${index}`.padEnd(Math.max(1, 90 - config.home.length - 1), "x");
@@ -173,14 +174,16 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
     await press(stdin, "r", ENTER);
 
     for (let step = 0; step < 30; step++) {
-      expect(lastFrame()!.split("\n").length).toBeLessThanOrEqual(16);
+      const lines = plain(lastFrame()!).split("\n");
+      expect(lines.length).toBeLessThanOrEqual(16);
+      expect(lines.every((line) => line.length <= 100)).toBe(true);
       await press(stdin, DOWN);
     }
   });
@@ -192,12 +195,12 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
     let rows = 16;
     Object.defineProperty(stdout, "rows", { get: () => rows });
     stdout.emit("resize");
     await press(stdin, "r", ENTER, ...Array.from({ length: 60 }, () => DOWN));
-    rows = 30;
+    rows = 26;
     stdout.emit("resize");
     await new Promise((resolve) => setTimeout(resolve, 0));
     const beforeUp = lastFrame();
@@ -215,7 +218,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -225,7 +228,7 @@ describe("TUI in a short terminal", () => {
 
     const lines = lastFrame()!.split("\n");
     expect(lines.length).toBeLessThanOrEqual(16);
-    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(lines[0]).toBe(TITLE);
     expect(lastFrame()).toContain("skill-09");
   });
 });
@@ -242,41 +245,44 @@ async function cleanupReport() {
 }
 
 describe("TUI confirmation screen", () => {
-  it("lists each selected Installation with its planned action and how to undo it", async () => {
+  it("groups the selected Installations by planned action under a heading, then lists how to undo each", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
 
     const target = join(config.home, ".agents", "skills", "find-skills");
-    const frame = unwrapped(lastFrame()!);
-    expect(frame).toContain(
-      "idle@market Uninstall with claude plugin uninstall idle@market --scope user " +
-        "Undo: claude plugin install idle@market --scope user",
+    const lines = lastFrame()!.split("\n").map((line) => line.trim());
+    const after = (heading: string) => lines[lines.indexOf(heading) + 1];
+    expect(lines).toContain("Remove 3 Installations?");
+    expect(after("Uninstall Plugins (1)")).toBe(
+      "idle@market  Uninstall with claude plugin uninstall idle@market --scope user",
     );
-    expect(frame).toContain(
-      `find-skills Remove the link only, keeping ${target} ` +
-        `Undo: ln -s '${target}' '${join(config.path, "skills", "find-skills")}'`,
+    expect(after("Remove links (1)")).toBe(`find-skills  Remove the link only, keeping ${target}`);
+    expect(after("Move to trash (1)")).toBe(
+      `ux-writing  Move ${join(config.path, "skills", "ux-writing")} to the system trash`,
     );
-    expect(frame).toContain(
-      `ux-writing Move ${join(config.path, "skills", "ux-writing")} to the system trash ` +
-        "Undo: restore it from the system trash",
-    );
-    expect(frame).not.toContain("[x]");
+    expect(lines.slice(lines.indexOf("Undo") + 1, lines.indexOf("Undo") + 4)).toEqual([
+      "claude plugin install idle@market --scope user",
+      `ln -s '${target}' '${join(config.path, "skills", "find-skills")}'`,
+      "ux-writing: restore it from the system trash",
+    ]);
+    expect(lastFrame()).not.toContain("◉");
   });
 
   it("reviews a selection made in the same burst of keys", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, `r${ENTER}`);
 
-    expect(lastFrame()).toContain("Review the Cleanup of 3 Installations");
+    expect(lastFrame()).toContain("Remove 3 Installations?");
   });
 
   it("asks for a selection when reviewing with nothing selected", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, ENTER);
 
@@ -286,7 +292,7 @@ describe("TUI confirmation screen", () => {
 
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, " ", ENTER, ESCAPE);
 
@@ -295,13 +301,14 @@ describe("TUI confirmation screen", () => {
 
   it("offers no way past the confirmation screen in a dry run", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", ENTER, ENTER, "y");
 
     expect(lastFrame()).toContain("Dry run: nothing will be changed");
-    expect(lastFrame()).toContain("Undo: restore it from the system trash");
-    expect(lastFrame()).not.toContain("y run the Cleanup");
+    expect(lastFrame()).not.toContain("Remove 3 Installations?");
+    expect(lastFrame()).toContain("ux-writing: restore it from the system trash");
+    expect(lastFrame()).not.toContain("y remove");
   });
 });
 
@@ -311,10 +318,11 @@ describe("TUI Cleanup", () => {
     const trash = fakeTrash(join(config.home, ".Trash"));
     const run = (selection: Installation[]) =>
       cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
-    expect(lastFrame()).toContain("y run the Cleanup");
+    expect(lastFrame()).toContain("y remove");
     await press(stdin, "y");
     await settle();
 
@@ -324,9 +332,9 @@ describe("TUI Cleanup", () => {
     const summary = [
       "Cleanup of 3 Installations: 3 removed, 0 failed",
       "",
-      "removed  idle@market",
-      "removed  find-skills",
-      "removed  ux-writing",
+      "✔ removed  idle@market",
+      "✔ removed  find-skills",
+      "✔ removed  ux-writing",
       "",
       "To reinstall a removed Plugin:",
       "  claude plugin install idle@market --scope user",
@@ -337,8 +345,109 @@ describe("TUI Cleanup", () => {
       "Moved to the system trash, where they can be restored:",
       `  ${folder}`,
     ];
-    expect(unwrapped(lastFrame()!)).toContain(unwrapped(summary.join("\n")));
+    expect(lastFrame()).toContain(summary.join("\n"));
     expect(trash.moves).toEqual([folder]);
+  });
+
+  it("marks each Installation removed or failed, with the reason for a failure", async () => {
+    const { config, result } = await cleanupReport();
+    const folder = join(config.path, "skills", "ux-writing");
+    const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, "r", ENTER, "y");
+    await settle();
+
+    const lines = lastFrame()!.split("\n");
+    expect(lines).toContain("Cleanup of 3 Installations: 2 removed, 1 failed");
+    expect(lines).toContain("✔ removed  find-skills");
+    const failed = lines.indexOf("✖ failed   ux-writing");
+    expect(lines[failed + 1]).toBe(`    could not move ${folder} to the trash`);
+    expect(lastFrame()).not.toContain("Moved to the system trash");
+  });
+});
+
+describe("TUI groups", () => {
+  it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used {2}0 Too New · 2 recommended\s+0 selected$/);
+
+    await press(stdin, "r");
+
+    expect(lastFrame()!.split("\n")[1]).toMatch(/\s2 selected$/);
+  });
+
+  it("lists Installations under a header per Usage Status that the cursor skips", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const lines = () => lastFrame()!.split("\n");
+
+    expect(lines().map((line) => line.trim())).toEqual(expect.arrayContaining(["Unused  3", "Used  1"]));
+
+    await press(stdin, DOWN, DOWN, DOWN);
+
+    const cursorLine = lines().findIndex((line) => line.startsWith("›"));
+    expect(lines()[cursorLine]).toContain("vercel@market");
+    expect(lines()[cursorLine - 1]!.trim()).toBe("Used  1");
+  });
+});
+
+describe("TUI detail panel", () => {
+  it("shows a Linked Skill's target and that a Synced Skill cannot be removed", async () => {
+    const config = await fakeConfigDir();
+    const target = join(config.home, ".agents", "skills", "find-skills");
+    await config.linkedSkill("find-skills", { target });
+    await config.syncedSkill("brand-voice");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ ...config.paths, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 200, rows: 40 });
+    await settle();
+    const withCursorOn = async (name: string) => {
+      for (let step = 0; step < 2 && !cursorLine(lastFrame()!).includes(name); step++) await press(stdin, DOWN);
+      return lastFrame()!;
+    };
+
+    const linked = await withCursorOn("find-skills");
+    expect(linked).toContain(`Links to ${target}`);
+    expect(linked).toContain("Unused  No Use since 2026-09-28");
+    expect(linked).not.toContain("cannot be removed");
+
+    await press(stdin, UP);
+    const synced = await withCursorOn("brand-voice");
+    expect(synced).toContain("Managed by claude.ai, cannot be removed");
+    expect(synced).not.toContain(`Links to ${target}`);
+  });
+});
+
+describe("TUI layout", () => {
+  it("keeps every line on one terminal row, truncating long names with an ellipsis", async () => {
+    const config = await fakeConfigDir();
+    const longName = `a-skill-with-a-name-far-too-long-for-the-name-column-${"x".repeat(60)}`;
+    await config.linkedSkill(longName, { target: join(config.home, "repositories", "y".repeat(120)) });
+    await config.plugin("vercel@market", { skills: ["deploy"] });
+    await config.syncedSkill("brand-voice");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("ship it", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ ...config.paths, now });
+
+    for (const columns of [100, 60]) {
+      const { lastFrame, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+      resize(stdout, { columns, rows: 40 });
+      await settle();
+
+      const lines = plain(lastFrame()!).split("\n");
+      expect(lines.every((line) => line.length <= columns)).toBe(true);
+      expect(lines.find((line) => line.includes("a-skill-with-a-name"))).toContain("…");
+    }
   });
 });
 
@@ -364,6 +473,20 @@ async function press(stdin: { write: (data: string) => void }, ...keys: string[]
   }
 }
 
+function resize(stdout: NodeJS.EventEmitter, { columns, rows }: { columns: number; rows: number }) {
+  Object.defineProperty(stdout, "columns", { value: columns, configurable: true });
+  Object.defineProperty(stdout, "rows", { value: rows, configurable: true });
+  stdout.emit("resize");
+}
+
+function cursorLine(frame: string): string {
+  return frame.split("\n").find((line) => line.startsWith("›")) ?? "";
+}
+
+function plain(frame: string): string {
+  return frame.replace(/\u001B\[[0-9;]*m/g, "");
+}
+
 function unwrapped(frame: string): string {
   return frame.replace(/\s+/g, " ");
 }
@@ -371,6 +494,6 @@ function unwrapped(frame: string): string {
 function selected(frame: string): string[] {
   return frame
     .split("\n")
-    .filter((line) => line.includes("[x]"))
+    .filter((line) => line.includes("◉"))
     .map((line) => line.match(/\S+@\S+|anthropic-skills:\S+|ux-writing|find-skills/)![0]);
 }
