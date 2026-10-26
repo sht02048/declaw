@@ -1,9 +1,10 @@
 import { dirname, join } from "node:path";
+import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus } from "./read-status.js";
 import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
-import { findMainTranscripts, readTranscript } from "./transcripts.js";
+import { findTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
 export type { ReadStatus } from "./read-status.js";
@@ -63,7 +64,7 @@ export interface Report {
 
 type Usage = Pick<StandaloneSkill, "uses" | "lastUse">;
 
-const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
+const COUNTED_BY_SKILL_USAGE = new Set<ComponentKind>(["skill", "command"]);
 
 export async function report({
   configDir,
@@ -72,19 +73,12 @@ export async function report({
 }: ReportOptions): Promise<Report> {
   const { status: installRecords, plugins } = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
-  const skillToolNames = new Set(skills.map((skill) => skill.name));
-  for (const plugin of plugins) {
-    for (const component of plugin.components) {
-      if (SKILL_TOOL_KINDS.has(component.kind)) skillToolNames.add(component.name);
-    }
-  }
-  const transcripts = await readTranscriptUsage(configDir, skillToolNames);
+  const transcripts = await readTranscriptUsage(configDir, new UsageLedger(plugins, skills));
   const counter = await readSkillUsageCounter(configFile);
 
-  const usageOf = (name: string, extendedByCounter: boolean): Usage => {
-    const inPeriod = transcripts.usage === null ? null : (transcripts.usage.get(name) ?? NO_USE);
-    if (extendedByCounter) {
-      return { uses: inPeriod?.uses ?? "unknown", lastUse: lastUseOf(name, inPeriod, counter) };
+  const usageOf = (inPeriod: UsageTally | null, counterKey: string | null): Usage => {
+    if (counterKey !== null) {
+      return { uses: inPeriod?.uses ?? "unknown", lastUse: lastUseOf(counterKey, inPeriod, counter) };
     }
     return inPeriod ?? { uses: "unknown", lastUse: "unknown" };
   };
@@ -101,7 +95,7 @@ export async function report({
       ...skills.map((skill): StandaloneSkill => ({
         kind: "standalone-skill",
         name: skill.name,
-        ...usageOf(skill.name, true),
+        ...usageOf(transcripts.ledger?.skill(skill.name) ?? null, skill.name),
         ...(skill.linked && { linked: skill.linked }),
         ...(skill.synced && { synced: skill.synced }),
       })),
@@ -111,16 +105,19 @@ export async function report({
 
 function pluginInstallation(
   plugin: PluginEntry,
-  usageOf: (name: string, extendedByCounter: boolean) => Usage,
+  usageOf: (inPeriod: UsageTally | null, counterKey: string | null) => Usage,
   transcripts: TranscriptUsage,
 ): Plugin {
   const components = plugin.components.map(
     (component): Component => ({
       ...component,
-      ...usageOf(component.name, SKILL_TOOL_KINDS.has(component.kind)),
+      ...usageOf(
+        transcripts.ledger?.component(component) ?? null,
+        COUNTED_BY_SKILL_USAGE.has(component.kind) ? component.name : null,
+      ),
     }),
   );
-  let uses: number | Unknown = transcripts.usage === null ? "unknown" : 0;
+  let uses: number | Unknown = transcripts.ledger === null ? "unknown" : 0;
   for (const component of components) {
     uses = uses === "unknown" || component.uses === "unknown" ? "unknown" : uses + component.uses;
   }
@@ -151,29 +148,20 @@ function latestLastUse(lastUses: Usage["lastUse"][], periodStart: Date | null): 
   return latest !== null && periodStart !== null && latest >= periodStart ? latest : "unknown";
 }
 
-interface InPeriodUsage {
-  uses: number;
-  lastUse: Date | null;
-}
-
-const NO_USE: InPeriodUsage = { uses: 0, lastUse: null };
-
 interface TranscriptUsage {
   status: ReadStatus;
   start: Date | null;
-  usage: Map<string, InPeriodUsage> | null;
+  ledger: UsageLedger | null;
 }
 
-async function readTranscriptUsage(configDir: string, skillNames: Set<string>): Promise<TranscriptUsage> {
+async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Promise<TranscriptUsage> {
   let files: string[];
   try {
-    files = await findMainTranscripts(configDir);
+    files = await findTranscripts(configDir);
   } catch {
-    return { status: unreadable("transcripts folder could not be read"), start: null, usage: null };
+    return { status: unreadable("transcripts folder could not be read"), start: null, ledger: null };
   }
 
-  const usage = new Map<string, InPeriodUsage>();
-  for (const name of skillNames) usage.set(name, { uses: 0, lastUse: null });
   let start: Date | null = null;
   let skippedLines = 0;
   let unreadableFiles = 0;
@@ -183,12 +171,7 @@ async function readTranscriptUsage(configDir: string, skillNames: Set<string>): 
       for await (const entry of readTranscript(file, () => skippedLines++)) {
         const at = entryTimestamp(entry);
         if (at !== null && (start === null || at < start)) start = at;
-        for (const use of usesIn(entry)) {
-          const stats = usage.get(use.name);
-          if (!stats) continue;
-          stats.uses += 1;
-          stats.lastUse = later(stats.lastUse, use.at);
-        }
+        for (const use of usesIn(entry)) ledger.record(use);
       }
     } catch {
       unreadableFiles += 1;
@@ -200,12 +183,12 @@ async function readTranscriptUsage(configDir: string, skillNames: Set<string>): 
     unreadableFiles > 0 && `${unreadableFiles} transcript ${plural(unreadableFiles, "file")} could not be read`,
   ].filter((problem) => problem !== false);
   const status = problems.length === 0 ? readable : partiallyReadable(problems.join("; "));
-  return { status, start, usage };
+  return { status, start, ledger };
 }
 
 function lastUseOf(
   name: string,
-  inPeriod: InPeriodUsage | null,
+  inPeriod: UsageTally | null,
   counter: SkillUsageCounterRead,
 ): Date | null | Unknown {
   const counterKnows = counter.status.status !== "unreadable" && !counter.skippedSkills.has(name);

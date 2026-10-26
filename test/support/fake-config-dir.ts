@@ -200,6 +200,30 @@ export class FakeConfigDir {
     await writeFile(file, text.join("\n") + "\n");
     return this;
   }
+
+  async subagentTranscript(
+    { project, session, agentId }: TranscriptLocation & { agentId: string },
+    lines: TranscriptLine[],
+  ): Promise<this> {
+    const file = join(
+      this.path,
+      "projects",
+      encodeProjectDir(project),
+      session,
+      "subagents",
+      `agent-${agentId}.jsonl`,
+    );
+    await mkdir(dirname(file), { recursive: true });
+    const agentLines = lines.map((line) => ({
+      ...line,
+      sessionId: session,
+      cwd: project,
+      agentId,
+      isSidechain: true,
+    }));
+    await writeFile(file, agentLines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    return this;
+  }
 }
 
 export async function fakeConfigDir(options: FakeConfigDirOptions = {}): Promise<FakeConfigDir> {
@@ -274,16 +298,91 @@ export function userPrompt(text: string, timestamp: string): TranscriptLine {
   };
 }
 
-export function hookRun(hookEvent: string, timestamp: string): TranscriptLine {
+export function slashCommand(
+  name: string,
+  timestamp: string,
+  { args }: { args?: string } = {},
+): TranscriptLine {
+  const tags = [
+    `<command-message>${name}</command-message>`,
+    `<command-name>/${name}</command-name>`,
+    ...(args === undefined ? [] : [`<command-args>${args}</command-args>`]),
+  ];
+  return userPrompt(tags.join("\n"), timestamp);
+}
+
+export function hookRun(
+  hookEvent: string,
+  timestamp: string,
+  {
+    type = "hook_success",
+    command = "node ./hook.cjs",
+    content,
+  }: { type?: string; command?: string; content?: string } = {},
+): TranscriptLine {
   return {
     type: "attachment",
     timestamp,
     attachment: {
-      type: "hook_success",
+      type,
       hookName: `${hookEvent}:startup`,
       hookEvent,
-      command: "node ./hook.cjs",
+      command,
       exitCode: 0,
+      ...(content === undefined ? {} : { content }),
+    },
+  };
+}
+
+export function stopHookSummary(timestamp: string, command: string): TranscriptLine {
+  return {
+    type: "system",
+    subtype: "stop_hook_summary",
+    timestamp,
+    hookCount: 1,
+    hookInfos: [{ command }],
+    hookErrors: [],
+    preventedContinuation: false,
+  };
+}
+
+export function mcpToolCall(toolName: string, timestamp: string): TranscriptLine {
+  toolUseCounter += 1;
+  return {
+    type: "assistant",
+    timestamp,
+    isSidechain: false,
+    message: {
+      role: "assistant",
+      content: [{ type: "tool_use", id: `toolu_${toolUseCounter}`, name: toolName, input: {} }],
+    },
+  };
+}
+
+export function agentToolCall(
+  subagentType: string,
+  timestamp: string,
+  { tool = "Agent" }: { tool?: "Agent" | "Task" } = {},
+): TranscriptLine {
+  toolUseCounter += 1;
+  return {
+    type: "assistant",
+    timestamp,
+    isSidechain: false,
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_use",
+          id: `toolu_${toolUseCounter}`,
+          name: tool,
+          input: {
+            subagent_type: subagentType,
+            description: `Run ${subagentType}`,
+            prompt: "Do the delegated work.",
+          },
+        },
+      ],
     },
   };
 }
