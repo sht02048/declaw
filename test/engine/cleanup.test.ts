@@ -58,6 +58,46 @@ describe("cleanup of Plugins", () => {
     ]);
   });
 
+  it("reports a failed uninstall with the command's output as-is and goes on with the rest", async () => {
+    const { config, result } = await twoPlugins();
+    const failure =
+      '✘ Failed to uninstall plugin "vercel@claude-plugins-official": settings_still_on\n  see `claude plugin disable`\n';
+    const { calls, claude } = fakeClaude({
+      "vercel@claude-plugins-official": { exitCode: 1, output: failure },
+    });
+
+    const outcomes = await cleanup(named(result, "vercel@claude-plugins-official", "idle@market"), {
+      configDir: config.path,
+      claude,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(outcomes.map(({ name, outcome }) => ({ name, outcome }))).toEqual([
+      { name: "vercel@claude-plugins-official", outcome: "failed" },
+      { name: "idle@market", outcome: "removed" },
+    ]);
+    expect(outcomes[0]).toMatchObject({ output: failure });
+  });
+
+  it("reports a failure when claude cannot be run at all and goes on with the rest", async () => {
+    const { config, result } = await twoPlugins();
+    const calls: string[][] = [];
+    const claude: ClaudeRunner = async (args) => {
+      calls.push(args);
+      if (calls.length === 1) throw new Error("spawn claude ENOENT");
+      return { exitCode: 0, output: "" };
+    };
+
+    const outcomes = await cleanup(named(result, "vercel@claude-plugins-official", "idle@market"), {
+      configDir: config.path,
+      claude,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(outcomes[0]).toMatchObject({ outcome: "failed", output: "spawn claude ENOENT" });
+    expect(outcomes[1]).toMatchObject({ outcome: "removed" });
+  });
+
   it("never deletes a Plugin's files itself", async () => {
     const { config, result } = await twoPlugins();
     const { claude } = fakeClaude();

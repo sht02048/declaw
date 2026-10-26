@@ -1,5 +1,5 @@
 import type { Installation } from "./index.js";
-import { planCleanup, type PlannedAction } from "./plan.js";
+import { planCleanup, type PlannedAction, type UninstallPlugin } from "./plan.js";
 
 export interface ClaudeRun {
   exitCode: number;
@@ -15,6 +15,7 @@ export interface CleanupOptions {
 
 export type CleanupOutcome =
   | { name: string; action: PlannedAction; outcome: "removed" }
+  | { name: string; action: PlannedAction; outcome: "failed"; output: string }
   | { name: string; action: PlannedAction; outcome: "not-implemented" };
 
 export async function cleanup(
@@ -27,8 +28,20 @@ export async function cleanup(
       outcomes.push({ name: action.name, action, outcome: "not-implemented" });
       continue;
     }
-    await claude(["plugin", "uninstall", action.name, "--scope", action.scope]);
-    outcomes.push({ name: action.name, action, outcome: "removed" });
+    outcomes.push({ name: action.name, action, ...(await uninstall(action, claude)) });
   }
   return outcomes;
+}
+
+async function uninstall(
+  action: UninstallPlugin,
+  claude: ClaudeRunner,
+): Promise<{ outcome: "removed" } | { outcome: "failed"; output: string }> {
+  let run: ClaudeRun;
+  try {
+    run = await claude(["plugin", "uninstall", action.name, "--scope", action.scope]);
+  } catch (error) {
+    return { outcome: "failed", output: error instanceof Error ? error.message : String(error) };
+  }
+  return run.exitCode === 0 ? { outcome: "removed" } : { outcome: "failed", output: run.output };
 }
