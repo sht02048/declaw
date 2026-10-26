@@ -19,7 +19,7 @@ npx declaw stats          # print Usage Stats as a table
 npx declaw stats --json   # print the same Report as JSON
 ```
 
-`declaw` lists every Installation with its Usage Stats under the covered period. Move with the arrow keys, select with space, press `r` to select the recommended set, and press right or left to expand or collapse a Plugin's per-Component Uses. Synced Skills are listed but cannot be selected. Enter opens a confirmation screen that shows, for each selection, what will happen and how to undo it:
+`declaw` lists every Installation with its Usage Stats under the covered period. Move with the arrow keys, select with space, press `r` to select the recommended set, and press right or left to expand or collapse a Plugin's per-Component Uses. Each Plugin shows how many hooks it runs every session. Synced Skills are listed but cannot be selected. Enter opens a confirmation screen that shows, for each selection, what will happen and how to undo it:
 
 | Installation | What happens | Undo |
 |---|---|---|
@@ -33,9 +33,11 @@ declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set,
 
 The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used. A skill's last Use can still reach further back: declaw also reads the `skillUsage` counter in Claude Code's config file (`~/.claude.json`, or `.claude.json` inside `CLAUDE_CONFIG_DIR` when set). The counter never adds Uses to the period's count, and declaw reads no other key from that file.
 
-These files are internal to Claude Code and can change without notice. Both outputs show the read status of each source (the plugin install records, the transcripts, and the skill counter): `readable`, `partial` (some lines or records were skipped), or `unreadable`. A number that depends on an unreadable source is shown as `unknown` instead of zero or `never`.
+These files are internal to Claude Code and can change without notice. Both outputs show the read status of each source (the plugin install records, `settings.json`, the other plugin files such as manifests and hook configurations, the transcripts, and the skill counter): `readable`, `partial` (some lines, records, or Plugins were skipped), or `unreadable`. A number that depends on an unreadable source is shown as `unknown` instead of zero or `never`, and a corrupt file of one Plugin makes only that Plugin's numbers `unknown`.
 
-Each Installation is marked Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill), so there is not enough history to judge it. When only an unreadable source could know an Installation's last Use, it is marked Unknown instead and never called Unused. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
+A Standalone Skill is a folder in the skills folder that holds a `SKILL.md`; other folders and dot-folders are left out. A Linked Skill whose target no longer exists is still listed, flagged as a broken link.
+
+Each Installation's Usage Status is Unused, Used, or Too New. Too New means it was installed after the covered period began (by the install record for a Plugin, the folder's creation time for a Standalone Skill, or the link's own time for a Linked Skill; the modification time stands in only where the filesystem records no creation time), so there is not enough history to judge it. When only an unreadable source could know an Installation's last Use, it is marked Unknown instead and never called Unused. Unused Installations are listed first, oldest install first, followed by the rest, oldest last Use first. Installations marked `*` are recommended for Cleanup: every Unused or disabled one, except Too New and Synced Skills.
 
 ## Development
 
@@ -48,7 +50,7 @@ npm run build        # compile to dist/ with tsc
 node dist/cli.js stats   # run the built CLI
 ```
 
-Tests go through the engine's `report`, `planCleanup`, and `cleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. `cleanup` takes its trash mover and `claude` CLI runner as arguments, so its tests pass the fakes in `test/support/fake-effects.ts` and check the moves and calls they recorded instead of using the real system trash or running the real `claude plugin uninstall`. The real trash mover uses the [trash](https://github.com/sindresorhus/trash) package and lives in `src/system-effects.ts`. Never point tests at a real `~/.claude`. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
+Tests go through the engine's `report`, `planCleanup`, and `cleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. `cleanup` takes its trash mover and `claude` CLI runner as arguments, so its tests pass the fakes in `test/support/fake-effects.ts` and check the moves and calls they recorded instead of using the real system trash or running the real `claude plugin uninstall`. The real trash mover uses the [trash](https://github.com/sindresorhus/trash) package and lives in `src/system-effects.ts`. Never point tests at a real `~/.claude`. Fixtures set creation times through `test/support/birth-times.ts`, which the setup file feeds into `lstat`, because Node cannot set a file's birth time. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
 
 Domain terms are defined in [GLOSSARY.md](GLOSSARY.md), and design decisions are recorded in [docs/adr](docs/adr).
 
