@@ -91,6 +91,51 @@ describe("TUI", () => {
   });
 });
 
+describe("TUI in a short terminal", () => {
+  it("keeps the covered period at the top while scrolling through a long list", async () => {
+    const config = await fakeConfigDir();
+    const names = Array.from({ length: 20 }, (_, index) => `skill-${String(index).padStart(2, "0")}`);
+    for (const name of names) await config.standaloneSkill(name);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ configDir: config.path, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    Object.defineProperty(stdout, "rows", { value: 12 });
+    stdout.emit("resize");
+
+    await press(stdin, ...Array.from({ length: 19 }, () => DOWN));
+
+    const lines = lastFrame()!.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(12);
+    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(lines.find((line) => line.startsWith(">"))).toContain("skill-19");
+    expect(lastFrame()).not.toContain("skill-00");
+  });
+
+  it("scrolls a long confirmation screen under the covered period", async () => {
+    const config = await fakeConfigDir();
+    const names = Array.from({ length: 10 }, (_, index) => `skill-${String(index).padStart(2, "0")}`);
+    for (const name of names) await config.standaloneSkill(name);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ configDir: config.path, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    Object.defineProperty(stdout, "rows", { value: 16 });
+    stdout.emit("resize");
+
+    await press(stdin, "r", ENTER);
+    expect(lastFrame()).not.toContain("skill-09");
+    await press(stdin, ...Array.from({ length: 60 }, () => DOWN));
+
+    const lines = lastFrame()!.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(16);
+    expect(lines[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
+    expect(lastFrame()).toContain("skill-09");
+  });
+});
+
 async function cleanupReport() {
   const config = await fakeConfigDir();
   await config.plugin("idle@market", { skills: ["nap"] });
