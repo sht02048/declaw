@@ -1,6 +1,6 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
-import wrapAnsi from "wrap-ansi";
+import { Spinner } from "@inkjs/ui";
 import {
   isRemovable,
   planCleanup,
@@ -10,7 +10,6 @@ import {
   type Report,
 } from "../engine/index.js";
 import { formatSources } from "../cli/format.js";
-import { formatCleanupSummary } from "../cli/summary.js";
 import { countOf } from "../plural.js";
 import {
   columnHeader,
@@ -26,6 +25,7 @@ import {
 } from "./list.js";
 import { confirmHeading, confirmLines } from "./confirm.js";
 import { DetailPanel, detailLines } from "./detail.js";
+import { summaryHeading, summaryLines } from "./summary.js";
 import { formatPeriodLine } from "./text.js";
 
 export interface AppProps {
@@ -42,7 +42,6 @@ interface Line {
   key: string;
   element?: ReactNode;
   content?: ReactNode;
-  text?: string;
   wrap?: "truncate-end" | "truncate-middle";
   style?: "bold" | "dim" | "warning";
 }
@@ -63,7 +62,10 @@ const CONFIRM_KEYS: Keys = [
   ["q", "quit"],
   ["↑↓", "scroll"],
 ];
-const SUMMARY_KEYS = "up/down scroll · q quit";
+const SUMMARY_KEYS: Keys = [
+  ["↑↓", "scroll"],
+  ["q", "quit"],
+];
 
 export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const installations = useMemo(() => groupedByUsageStatus(report.installations), [report]);
@@ -100,11 +102,7 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   });
   const footer = footerOf(state, dryRun);
 
-  const heightOf = (line: Line) =>
-    line.text === undefined
-      ? 1
-      : wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
-  const fixedHeight = [...header, ...body.header, ...footer].reduce((sum, line) => sum + heightOf(line), 0);
+  const fixedHeight = header.length + body.header.length + footer.length;
   const detailContext = { now, periodStart: report.period.start, configDir };
   const panelHeight = useMemo(
     () => Math.max(0, ...installations.map((installation) => detailLines(installation, detailContext).length)) + 2,
@@ -115,7 +113,7 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const panel = current && rows - 1 - fixedHeight - panelHeight >= MIN_LIST_ROWS ? current : undefined;
   const gap: Line[] = screen === "list" && !panel ? [{ key: "panel gap", content: "" }] : [];
   const room = Math.max(3, rows - 1 - fixedHeight - (panel ? panelHeight : gap.length));
-  const heights = body.lines.map(heightOf);
+  const heights = body.lines.map(() => 1);
 
   let top: number;
   if (screen === "list") {
@@ -167,13 +165,6 @@ const MIN_LIST_ROWS = 6;
 
 function renderLine(line: Line): ReactNode {
   if (line.element !== undefined) return <Box key={line.key}>{line.element}</Box>;
-  if (line.text !== undefined) {
-    return (
-      <Text key={line.key} bold={line.style === "bold"} dimColor={line.style === "dim"}>
-        {line.text === "" ? " " : line.text}
-      </Text>
-    );
-  }
   return (
     <Text
       key={line.key}
@@ -408,17 +399,29 @@ function bodyOf(state: State, installations: Installation[], plan: () => Planned
     }
     case "running":
       return {
-        header: [],
-        lines: [{ key: "running", text: `Cleaning up ${countOf(state.selection.size, "Installation")}...` }],
+        header: [{ key: "running gap", content: "" }],
+        lines: [
+          {
+            key: "running",
+            element: <Spinner label={`Removing ${countOf(state.selection.size, "Installation")}…`} />,
+          },
+        ],
         focus: 0,
       };
     case "summary":
-      return summaryLines(state.outcomes);
+      return {
+        header: [
+          { key: "heading gap", content: "" },
+          { key: "heading", content: summaryHeading(state.outcomes) },
+          { key: "lines gap", content: "" },
+        ],
+        lines: summaryLines(state.outcomes),
+        focus: 0,
+      };
   }
 }
 
 function footerOf(state: State, dryRun: boolean): Line[] {
-  const gap: Line = { key: "gap", text: "" };
   switch (state.screen) {
     case "list":
       return [
@@ -435,16 +438,19 @@ function footerOf(state: State, dryRun: boolean): Line[] {
     case "running":
       return [];
     case "summary":
-      return [gap, { key: "keys", text: SUMMARY_KEYS, style: "dim" }];
+      return [
+        { key: "keys gap", content: "" },
+        {
+          key: "keys",
+          content: (
+            <>
+              {keyBar(SUMMARY_KEYS)}
+              <Text dimColor>  · the summary stays in the terminal after you quit</Text>
+            </>
+          ),
+        },
+      ];
   }
-}
-
-function summaryLines(outcomes: CleanupOutcome[]): Body {
-  const lines = formatCleanupSummary(outcomes)
-    .replace(/\n$/, "")
-    .split("\n")
-    .map((text, index): Line => ({ key: `summary ${index}`, text }));
-  return { header: [], lines, focus: 0 };
 }
 
 interface View {

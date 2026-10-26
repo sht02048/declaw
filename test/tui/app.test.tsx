@@ -318,7 +318,8 @@ describe("TUI Cleanup", () => {
     const trash = fakeTrash(join(config.home, ".Trash"));
     const run = (selection: Installation[]) =>
       cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
     expect(lastFrame()).toContain("y remove");
@@ -331,9 +332,9 @@ describe("TUI Cleanup", () => {
     const summary = [
       "Cleanup of 3 Installations: 3 removed, 0 failed",
       "",
-      "removed  idle@market",
-      "removed  find-skills",
-      "removed  ux-writing",
+      "✔ removed  idle@market",
+      "✔ removed  find-skills",
+      "✔ removed  ux-writing",
       "",
       "To reinstall a removed Plugin:",
       "  claude plugin install idle@market --scope user",
@@ -344,8 +345,28 @@ describe("TUI Cleanup", () => {
       "Moved to the system trash, where they can be restored:",
       `  ${folder}`,
     ];
-    expect(unwrapped(lastFrame()!)).toContain(unwrapped(summary.join("\n")));
+    expect(lastFrame()).toContain(summary.join("\n"));
     expect(trash.moves).toEqual([folder]);
+  });
+
+  it("marks each Installation removed or failed, with the reason for a failure", async () => {
+    const { config, result } = await cleanupReport();
+    const folder = join(config.path, "skills", "ux-writing");
+    const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, "r", ENTER, "y");
+    await settle();
+
+    const lines = lastFrame()!.split("\n");
+    expect(lines).toContain("Cleanup of 3 Installations: 2 removed, 1 failed");
+    expect(lines).toContain("✔ removed  find-skills");
+    const failed = lines.indexOf("✖ failed   ux-writing");
+    expect(lines[failed + 1]).toBe(`    could not move ${folder} to the trash`);
+    expect(lastFrame()).not.toContain("Moved to the system trash");
   });
 });
 
