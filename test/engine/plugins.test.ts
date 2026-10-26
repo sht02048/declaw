@@ -264,7 +264,7 @@ describe("report: plugin skill Uses", () => {
         kind: "plugin",
         name: "omc-tools@omc",
         installedAt: new Date("2026-09-01T00:00:00.000Z"),
-        status: "used",
+        usageStatus: "used",
         recommended: false,
         enabled: true,
         hooks: 0,
@@ -352,8 +352,8 @@ describe("report: unreadable plugin files", () => {
       reason: "files of 1 Plugin could not be read",
     });
     expect(plugins(result)).toMatchObject([
-      { name: "broken@market", status: "unknown", uses: "unknown", lastUse: "unknown", hooks: "unknown" },
-      { name: "healthy@market", status: "used", uses: 1, hooks: 1 },
+      { name: "broken@market", usageStatus: "unknown", uses: "unknown", lastUse: "unknown", hooks: "unknown" },
+      { name: "healthy@market", usageStatus: "used", uses: 1, hooks: 1 },
     ]);
   });
 

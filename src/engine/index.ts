@@ -3,12 +3,12 @@ import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
 import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
-import { judge, sortForCleanup, type Status } from "./statuses.js";
+import { judge, sortForCleanup, type UsageStatus } from "./usage-status.js";
 import { findTranscripts, readTranscript } from "./transcripts.js";
 import { lineTimestamp, usesIn } from "./uses.js";
 
 export type { ReadStatus, Unknown } from "./read-status.js";
-export type { Status } from "./statuses.js";
+export type { UsageStatus } from "./usage-status.js";
 export { isRemovable, planCleanup } from "./plan.js";
 export type { PlannedAction, PlanOptions } from "./plan.js";
 export { cleanup } from "./cleanup.js";
@@ -35,7 +35,7 @@ export interface StandaloneSkill {
   kind: "standalone-skill";
   name: string;
   installedAt: Date | null;
-  status: Status;
+  usageStatus: UsageStatus;
   recommended: boolean;
   uses: number | Unknown;
   lastUse: Date | null | Unknown;
@@ -54,7 +54,7 @@ export interface Plugin {
   kind: "plugin";
   name: string;
   installedAt: Date | null;
-  status: Status;
+  usageStatus: UsageStatus;
   recommended: boolean;
   enabled: boolean | Unknown;
   hooks: number | Unknown;
@@ -134,7 +134,7 @@ function pluginInstallation(
   plugin: PluginRecord,
   usageOf: (inPeriod: UsageTally | null, counterKey: string | null) => Usage,
   transcripts: TranscriptUsage,
-): Omit<Plugin, "status" | "recommended"> {
+): Omit<Plugin, "usageStatus" | "recommended"> {
   const components = (plugin.components === "unknown" ? [] : plugin.components).map(
     (component): Component => ({
       ...component,

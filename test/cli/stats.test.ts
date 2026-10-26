@@ -59,7 +59,7 @@ describe("declaw stats", () => {
           kind: "standalone-skill",
           name: "ux-writing",
           installedAt: "2026-09-01T00:00:00.000Z",
-          status: "unused",
+          usageStatus: "unused",
           recommended: true,
           uses: 0,
           lastUse: null,
@@ -68,7 +68,7 @@ describe("declaw stats", () => {
           kind: "standalone-skill",
           name: "linear-ticket",
           installedAt: "2026-09-01T00:00:00.000Z",
-          status: "used",
+          usageStatus: "used",
           recommended: false,
           uses: 1,
           lastUse: "2026-10-09T10:30:00.000Z",
@@ -116,7 +116,7 @@ describe("declaw stats", () => {
     );
   });
 
-  it("shows each status and marks the recommended Installations", async () => {
+  it("shows each Usage Status and marks the recommended Installations", async () => {
     const config = await exampleConfig();
     await config.plugin("switched-off@market", { skills: ["work"] });
     await config.enabledPlugins({ "switched-off@market": false });
@@ -145,14 +145,14 @@ describe("declaw stats", () => {
     );
   });
 
-  it("carries each Installation's status and recommended flag in --json", async () => {
+  it("carries each Installation's Usage Status and recommended flag in --json", async () => {
     const config = await exampleConfig();
     await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
 
     const { stdout } = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
 
     const flags = JSON.parse(stdout).installations.map(
-      (i: { name: string; status: string; recommended: boolean }) => [i.name, i.status, i.recommended],
+      (i: { name: string; usageStatus: string; recommended: boolean }) => [i.name, i.usageStatus, i.recommended],
     );
     expect(flags).toEqual([
       ["ux-writing", "unused", true],
@@ -198,7 +198,7 @@ describe("declaw stats", () => {
       kind: "standalone-skill",
       name: "ux-writing",
       installedAt: "2026-09-01T00:00:00.000Z",
-      status: "used",
+      usageStatus: "used",
       recommended: false,
       uses: 0,
       lastUse: "2026-08-14T12:00:00.000Z",

@@ -5,11 +5,11 @@ import { fakeConfigDir, skillToolCall, userPrompt } from "../support/fake-config
 const now = new Date("2026-10-26T00:00:00.000Z");
 const periodStart = "2026-09-28T07:15:00.000Z";
 
-function statuses(result: Report): Record<string, string> {
-  return Object.fromEntries(result.installations.map((i) => [i.name, i.status]));
+function usageStatuses(result: Report): Record<string, string> {
+  return Object.fromEntries(result.installations.map((i) => [i.name, i.usageStatus]));
 }
 
-describe("report: Statuses", () => {
+describe("report: Usage Statuses", () => {
   it("marks a Plugin installed after the covered period began Too New, by its install record", async () => {
     const config = await fakeConfigDir();
     await config.plugin("old@market", { installedAt: "2026-09-01T00:00:00.000Z" });
@@ -20,7 +20,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({ "old@market": "unused", "new@market": "too-new" });
+    expect(usageStatuses(result)).toEqual({ "old@market": "unused", "new@market": "too-new" });
   });
 
   it("marks a Standalone Skill whose folder was created after the period began Too New", async () => {
@@ -34,7 +34,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({
+    expect(usageStatuses(result)).toEqual({
       "old-skill": "unused",
       "new-skill": "too-new",
       "anthropic-skills:new-synced": "too-new",
@@ -54,7 +54,7 @@ describe("report: Statuses", () => {
     const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
-      { name: "copied-skill", status: "too-new", installedAt: new Date("2026-10-20T00:00:00.000Z") },
+      { name: "copied-skill", usageStatus: "too-new", installedAt: new Date("2026-10-20T00:00:00.000Z") },
     ]);
   });
 
@@ -68,7 +68,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({ "old-skill": "unused", "new-skill": "too-new" });
+    expect(usageStatuses(result)).toEqual({ "old-skill": "unused", "new-skill": "too-new" });
   });
 
   it("judges a Linked Skill by the link's own time, not its target's", async () => {
@@ -87,7 +87,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({ "new-link": "too-new", "old-link": "unused" });
+    expect(usageStatuses(result)).toEqual({ "new-link": "too-new", "old-link": "unused" });
   });
 
   it("marks everything Too New while no transcripts cover any period", async () => {
@@ -97,7 +97,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({ "old@market": "too-new", "old-skill": "too-new" });
+    expect(usageStatuses(result)).toEqual({ "old@market": "too-new", "old-skill": "too-new" });
   });
 
   it("marks an Installation with a Use in the period Used, and one without Unused", async () => {
@@ -114,7 +114,7 @@ describe("report: Statuses", () => {
 
     const result = await report({ ...config.paths, now });
 
-    expect(statuses(result)).toEqual({
+    expect(usageStatuses(result)).toEqual({
       "vercel@market": "used",
       "idle@market": "unused",
       "linear-ticket": "used",
@@ -133,7 +133,7 @@ describe("report: Statuses", () => {
     const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
-      { name: "orca-linear", uses: 0, status: "used", recommended: false },
+      { name: "orca-linear", uses: 0, usageStatus: "used", recommended: false },
     ]);
   });
 
@@ -150,8 +150,8 @@ describe("report: Statuses", () => {
     const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
-      { name: "switched-off@market", lastUse: "unknown", status: "unknown", recommended: true },
-      { name: "orca-linear", lastUse: "unknown", status: "unknown", recommended: false },
+      { name: "switched-off@market", lastUse: "unknown", usageStatus: "unknown", recommended: true },
+      { name: "orca-linear", lastUse: "unknown", usageStatus: "unknown", recommended: false },
     ]);
   });
 });
@@ -267,7 +267,7 @@ describe("report: the recommended Cleanup set", () => {
     const result = await report({ ...config.paths, now });
 
     expect(result.installations).toMatchObject([
-      { name: "anthropic-skills:docx", status: "unused", recommended: false },
+      { name: "anthropic-skills:docx", usageStatus: "unused", recommended: false },
     ]);
   });
 });

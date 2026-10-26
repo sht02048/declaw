@@ -1,5 +1,5 @@
 import type { Report } from "../engine/index.js";
-import { formatLastUse, formatPeriod, formatSources, kindLabel, note, STATUS_LABELS } from "./format.js";
+import { formatLastUse, formatPeriod, formatSources, kindLabel, note, USAGE_STATUS_LABELS } from "./format.js";
 
 export function formatStatsJson(report: Report): string {
   return JSON.stringify(report, null, 2) + "\n";
@@ -7,10 +7,10 @@ export function formatStatsJson(report: Report): string {
 
 export function formatStatsText(report: Report): string {
   const rows = [
-    ["", "STATUS", "KIND", "NAME", "USES", "LAST USE", "HOOKS", "NOTE"],
+    ["", "USAGE", "KIND", "NAME", "USES", "LAST USE", "HOOKS", "NOTE"],
     ...report.installations.map((installation) => [
       installation.recommended ? "*" : "",
-      STATUS_LABELS[installation.status],
+      USAGE_STATUS_LABELS[installation.usageStatus],
       kindLabel(installation),
       installation.name,
       String(installation.uses),

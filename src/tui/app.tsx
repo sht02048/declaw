@@ -18,7 +18,7 @@ import {
   formatSources,
   kindLabel,
   note,
-  STATUS_LABELS,
+  USAGE_STATUS_LABELS,
 } from "../cli/format.js";
 import { formatCleanupSummary } from "../cli/summary.js";
 
@@ -317,7 +317,7 @@ function componentCells(component: Component): string[] {
 
 function installationCells(installation: Installation): string[] {
   return [
-    STATUS_LABELS[installation.status],
+    USAGE_STATUS_LABELS[installation.usageStatus],
     kindLabel(installation),
     installation.name,
     String(installation.uses),

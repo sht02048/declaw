@@ -1,4 +1,4 @@
-import type { CoveredPeriod, DataSources, Installation, ReadStatus, Status, Unknown } from "../engine/index.js";
+import type { CoveredPeriod, DataSources, Installation, ReadStatus, Unknown, UsageStatus } from "../engine/index.js";
 import { plural } from "../plural.js";
 
 export const SOURCE_LABELS: Record<keyof DataSources, string> = {
@@ -9,7 +9,7 @@ export const SOURCE_LABELS: Record<keyof DataSources, string> = {
   skillUsageCounter: "Skill usage counter",
 };
 
-export const STATUS_LABELS: Record<Status, string> = {
+export const USAGE_STATUS_LABELS: Record<UsageStatus, string> = {
   unused: "Unused",
   used: "Used",
   "too-new": "Too New",
