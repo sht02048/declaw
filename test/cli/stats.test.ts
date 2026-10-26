@@ -43,21 +43,21 @@ describe("declaw stats", () => {
       installations: [
         {
           kind: "standalone-skill",
-          name: "linear-ticket",
-          installedAt: "2026-09-01T00:00:00.000Z",
-          status: "used",
-          recommended: false,
-          uses: 1,
-          lastUse: "2026-10-09T10:30:00.000Z",
-        },
-        {
-          kind: "standalone-skill",
           name: "ux-writing",
           installedAt: "2026-09-01T00:00:00.000Z",
           status: "unused",
           recommended: true,
           uses: 0,
           lastUse: null,
+        },
+        {
+          kind: "standalone-skill",
+          name: "linear-ticket",
+          installedAt: "2026-09-01T00:00:00.000Z",
+          status: "used",
+          recommended: false,
+          uses: 1,
+          lastUse: "2026-10-09T10:30:00.000Z",
         },
       ],
     });
@@ -83,7 +83,7 @@ describe("declaw stats", () => {
     );
 
     const names = JSON.parse(stdout).installations.map((i: { name: string }) => i.name);
-    expect(names).toEqual(["linear-ticket", "ux-writing"]);
+    expect(names).toEqual(["ux-writing", "linear-ticket"]);
   });
 
   it("prints each skill with its Uses and last Use, under the covered period", async () => {

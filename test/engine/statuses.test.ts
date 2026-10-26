@@ -97,6 +97,54 @@ function recommended(result: Report): string[] {
   return result.installations.filter((i) => i.recommended).map((i) => i.name);
 }
 
+describe("report: sorting", () => {
+  it("lists Unused Installations first by oldest install, then the rest by oldest last Use", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("a-unused-recent@market", { installedAt: "2026-09-20T00:00:00.000Z" });
+    await config.plugin("b-used-late@market", { skills: ["work"] });
+    await config.standaloneSkill("c-unused-oldest", { createdAt: "2026-01-01T00:00:00.000Z" });
+    await config.linkedSkill("d-unused-middle", { createdAt: "2026-06-01T00:00:00.000Z" });
+    await config.standaloneSkill("e-used-early");
+    await config.standaloneSkill("f-too-new-used", { createdAt: "2026-10-01T00:00:00.000Z" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+      skillToolCall("e-used-early", "2026-10-02T09:00:00.000Z"),
+      skillToolCall("f-too-new-used", "2026-10-05T09:00:00.000Z"),
+      skillToolCall("b-used-late:work", "2026-10-09T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map((i) => i.name)).toEqual([
+      "c-unused-oldest",
+      "d-unused-middle",
+      "a-unused-recent@market",
+      "e-used-early",
+      "f-too-new-used",
+      "b-used-late@market",
+    ]);
+  });
+
+  it("puts Installations with no last Use ahead of used ones after the Unused", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("used-skill");
+    await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });
+    await config.standaloneSkill("idle-skill");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("go", periodStart),
+      skillToolCall("used-skill", "2026-10-02T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map((i) => i.name)).toEqual([
+      "idle-skill",
+      "fresh-skill",
+      "used-skill",
+    ]);
+  });
+});
+
 describe("report: the recommended Cleanup set", () => {
   it("recommends Unused Installations and leaves Used ones out", async () => {
     const config = await fakeConfigDir();

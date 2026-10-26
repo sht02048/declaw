@@ -19,6 +19,20 @@ export function judge<T extends Judgeable>(
   return { ...installation, status, recommended };
 }
 
+export function sortForCleanup<T extends Judgeable & { status: Status }>(installations: T[]): T[] {
+  return installations.toSorted((a, b) => {
+    const unusedFirst = Number(b.status === "unused") - Number(a.status === "unused");
+    if (unusedFirst !== 0) return unusedFirst;
+    return a.status === "unused"
+      ? oldestFirst(a.installedAt, b.installedAt)
+      : oldestFirst(a.lastUse, b.lastUse);
+  });
+}
+
+function oldestFirst(a: Date | null, b: Date | null): number {
+  return (a?.getTime() ?? -Infinity) - (b?.getTime() ?? -Infinity) || 0;
+}
+
 function statusOf(installation: Judgeable, periodStart: Date | null): Status {
   if (periodStart === null) return "too-new";
   const { installedAt } = installation;

@@ -1,7 +1,7 @@
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
-import { judge, type Status } from "./statuses.js";
+import { judge, sortForCleanup, type Status } from "./statuses.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
 export type { Status } from "./statuses.js";
@@ -87,7 +87,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
 
   return {
     period: { start, end: now },
-    installations: [
+    installations: sortForCleanup<Installation>([
       ...plugins.map((plugin) => judge(pluginInstallation(plugin, usage), start)),
       ...skills.map((skill) =>
         judge(
@@ -102,7 +102,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
           start,
         ),
       ),
-    ],
+    ]),
   };
 }
 
