@@ -4,7 +4,9 @@ See which Claude Code plugins and skills you actually use, so you can remove the
 
 declaw reads Claude Code's local files and reports Usage Stats for each Installation in User Scope: how many Uses it had in the period your transcripts cover, and when it was last used. It never changes anything while reporting.
 
-Status: early development. Plugins and Standalone Skills are reported; for Plugins, only Skill tool calls count as Uses so far.
+Status: early development. Plugins and Standalone Skills are reported.
+
+A Use is a Skill tool call, a slash command you typed that names a known skill or command, an Agent or Task call to a Plugin's subagent type, or a call to one of a Plugin's MCP tools. Uses inside subagents count. Hook runs never count, and built-in commands and subagent types are left out.
 
 ## Usage
 

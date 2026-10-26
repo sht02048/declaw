@@ -13,6 +13,7 @@ export interface ComponentEntry {
 
 export interface PluginEntry {
   key: string;
+  namespace: string;
   installedAt: Date | null;
   enabled: boolean;
   hooks: number;
@@ -42,7 +43,8 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const namespace = typeof manifest.name === "string" ? manifest.name : pluginName(key);
     const components = await findComponents(record.installPath, namespace, manifest);
     const hooks = await countHooks(record.installPath, manifest.hooks);
-    plugins.push({ key, installedAt: dateIn(record.installedAt), enabled, hooks, components });
+    const installedAt = dateIn(record.installedAt);
+    plugins.push({ key, namespace, installedAt, enabled, hooks, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }
