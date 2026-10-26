@@ -33,25 +33,45 @@ export async function findPlugins(configDir: string): Promise<PluginEntry[]> {
     const setting = enabledPlugins[key];
     const enabled = typeof setting === "boolean" ? setting : manifest?.defaultEnabled !== false;
     const namespace = typeof manifest?.name === "string" ? manifest.name : pluginName(key);
-    const components = await findComponents(record.installPath, namespace);
+    const components = await findComponents(record.installPath, namespace, manifest ?? {});
     plugins.push({ key, enabled, components });
   }
   return plugins.sort((a, b) => a.key.localeCompare(b.key));
 }
 
-async function findComponents(root: string, namespace: string): Promise<ComponentEntry[]> {
+async function findComponents(
+  root: string,
+  namespace: string,
+  manifest: JsonObject,
+): Promise<ComponentEntry[]> {
   const named = (kind: ComponentKind, names: string[]): ComponentEntry[] =>
     [...new Set(names)].sort().map((name) => ({ kind, name: `${namespace}:${name}` }));
 
+  const skillDirs = [join(root, "skills"), ...pathsIn(root, manifest.skills)];
+  const commandPaths = manifest.commands === undefined ? [join(root, "commands")] : pathsIn(root, manifest.commands);
+  const agentPaths = manifest.agents === undefined ? [join(root, "agents")] : pathsIn(root, manifest.agents);
+
   return [
-    ...named("skill", await skillsIn(join(root, "skills"))),
-    ...named("command", await markdownNamesIn(join(root, "commands"))),
-    ...named("agent", await markdownNamesIn(join(root, "agents"))),
-    ...named("mcp-server", await mcpServerKeysIn(join(root, ".mcp.json"))),
+    ...named("skill", await collect(skillDirs, skillsIn)),
+    ...named("command", await collect(commandPaths, markdownNamesIn)),
+    ...named("agent", await collect(agentPaths, markdownNamesIn)),
+    ...named("mcp-server", await mcpServerKeys(root, manifest.mcpServers)),
   ];
 }
 
+function pathsIn(root: string, value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values.filter((path): path is string => typeof path === "string").map((path) => join(root, path));
+}
+
+async function collect(paths: string[], find: (path: string) => Promise<string[]>): Promise<string[]> {
+  const names: string[] = [];
+  for (const path of paths) names.push(...(await find(path)));
+  return names;
+}
+
 async function skillsIn(dir: string): Promise<string[]> {
+  if (await exists(join(dir, "SKILL.md"))) return [basename(dir)];
   const names: string[] = [];
   for (const entry of await listDir(dir)) {
     if (await exists(join(dir, entry.name, "SKILL.md"))) names.push(entry.name);
@@ -59,15 +79,28 @@ async function skillsIn(dir: string): Promise<string[]> {
   return names;
 }
 
-async function markdownNamesIn(dir: string): Promise<string[]> {
-  return (await listDir(dir))
+async function markdownNamesIn(path: string): Promise<string[]> {
+  if (path.endsWith(".md")) return (await exists(path)) ? [basename(path, ".md")] : [];
+  return (await listDir(path))
     .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
     .map((entry) => basename(entry.name, ".md"));
 }
 
-async function mcpServerKeysIn(file: string): Promise<string[]> {
-  const config = await readJson(file);
-  return Object.keys(asObject(config?.mcpServers));
+async function mcpServerKeys(root: string, declared: unknown): Promise<string[]> {
+  const configs: JsonObject[] = [];
+  const defaultConfig = await readJson(join(root, ".mcp.json"));
+  if (defaultConfig) configs.push(defaultConfig);
+  for (const item of Array.isArray(declared) ? declared : [declared]) {
+    if (typeof item === "string") {
+      const fromFile = await readJson(join(root, item));
+      if (fromFile) configs.push(fromFile);
+    } else if (typeof item === "object" && item !== null) {
+      configs.push(asObject(item));
+    }
+  }
+  return configs.flatMap((config) =>
+    Object.keys(config.mcpServers === undefined ? config : asObject(config.mcpServers)),
+  );
 }
 
 function pluginName(key: string): string {

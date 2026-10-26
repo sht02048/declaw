@@ -68,4 +68,43 @@ describe("report: Plugin Inventory", () => {
       { kind: "mcp-server", name: "vercel:vercel", uses: 0, lastUse: null },
     ]);
   });
+
+  it("adds manifest skill paths, replaces default commands and agents, and merges MCP servers", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("toolkit@market", {
+      manifest: {
+        name: "toolkit",
+        skills: ["./extra-skills/", "./standalone/solo"],
+        commands: ["./cmds/", "./more/one-off.md"],
+        agents: "./crew/reviewer.md",
+        mcpServers: ["./servers.json", { inline: { command: "inline-server" } }],
+      },
+      skills: ["builtin"],
+      commands: ["ignored-command"],
+      agents: ["ignored-agent"],
+      mcpServers: { "from-default": { command: "default-server" } },
+      files: {
+        "extra-skills/added/SKILL.md": "---\nname: added\n---\n",
+        "standalone/solo/SKILL.md": "---\nname: solo\n---\n",
+        "cmds/ship.md": "Ship it.",
+        "more/one-off.md": "Once.",
+        "crew/reviewer.md": "---\nname: reviewer\n---\n",
+        "servers.json": JSON.stringify({ mcpServers: { "from-file": { command: "file-server" } } }),
+      },
+    });
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
+      "skill toolkit:added",
+      "skill toolkit:builtin",
+      "skill toolkit:solo",
+      "command toolkit:one-off",
+      "command toolkit:ship",
+      "agent toolkit:reviewer",
+      "mcp-server toolkit:from-default",
+      "mcp-server toolkit:from-file",
+      "mcp-server toolkit:inline",
+    ]);
+  });
 });

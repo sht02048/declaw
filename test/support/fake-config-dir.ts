@@ -19,6 +19,7 @@ export interface PluginFixture {
   commands?: string[];
   agents?: string[];
   mcpServers?: JsonObject;
+  files?: Record<string, string>;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -48,6 +49,11 @@ export class FakeConfigDir {
     }
     if (fixture.mcpServers) {
       await writeJson(join(installPath, ".mcp.json"), { mcpServers: fixture.mcpServers });
+    }
+    for (const [relativePath, content] of Object.entries(fixture.files ?? {})) {
+      const file = join(installPath, relativePath);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, content);
     }
 
     const scope = fixture.scope ?? "user";
