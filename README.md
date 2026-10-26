@@ -17,7 +17,9 @@ npx declaw stats --json   # print the same Report as JSON
 
 declaw reads the Claude Code config directory from `CLAUDE_CONFIG_DIR` when set, otherwise from `~/.claude`, the same place Claude Code reads.
 
-The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used.
+The covered period starts at the earliest timestamp in your session transcripts. Claude Code deletes old transcripts (30 days by default), so a skill with zero Uses means no Use in that period, not that it was never used. A skill's last Use can still reach further back: declaw also reads the `skillUsage` counter in Claude Code's config file (`~/.claude.json`, or `.claude.json` inside `CLAUDE_CONFIG_DIR` when set). The counter never adds Uses to the period's count, and declaw reads no other key from that file.
+
+These files are internal to Claude Code and can change without notice. Both outputs show the read status of each source: `readable`, `partial` (some lines or records were skipped), or `unreadable`. A number that depends on an unreadable source is shown as `unknown` instead of zero or `never`.
 
 ## Development
 
