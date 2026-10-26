@@ -1,8 +1,13 @@
-import type { Installation, Report } from "../engine/index.js";
+import type { DataSources, Installation, ReadStatus, Report } from "../engine/index.js";
 
 export function formatStatsJson(report: Report): string {
   return JSON.stringify(report, null, 2) + "\n";
 }
+
+const SOURCE_LABELS: Record<keyof DataSources, string> = {
+  transcripts: "Transcripts",
+  skillUsageCounter: "Skill usage counter",
+};
 
 const KIND_LABELS: Record<Installation["kind"], string> = {
   "standalone-skill": "Standalone Skill",
@@ -21,7 +26,7 @@ export function formatStatsText(report: Report): string {
       KIND_LABELS[installation.kind],
       installation.name,
       String(installation.uses),
-      installation.lastUse === null ? "never" : formatDate(installation.lastUse),
+      formatLastUse(installation.lastUse),
     ]),
   ];
   const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));
@@ -32,7 +37,21 @@ export function formatStatsText(report: Report): string {
       .trimEnd(),
   );
 
-  return [header, "", ...table, ""].join("\n");
+  const sources = (Object.keys(SOURCE_LABELS) as (keyof DataSources)[]).map(
+    (source) => `${SOURCE_LABELS[source]}: ${formatReadStatus(report.sources[source])}`,
+  );
+
+  return [header, ...sources, "", ...table, ""].join("\n");
+}
+
+function formatReadStatus(read: ReadStatus): string {
+  return read.status === "readable" ? read.status : `${read.status} (${read.reason})`;
+}
+
+function formatLastUse(lastUse: Installation["lastUse"]): string {
+  if (lastUse === null) return "never";
+  if (lastUse === "unknown") return lastUse;
+  return formatDate(lastUse);
 }
 
 function formatDate(date: Date): string {

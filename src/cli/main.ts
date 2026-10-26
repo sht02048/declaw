@@ -1,4 +1,4 @@
-import { resolveConfigDir } from "../config-dir.js";
+import { resolveConfigDir, resolveConfigFile } from "../config-dir.js";
 import { report } from "../engine/index.js";
 import { formatStatsJson, formatStatsText } from "./stats.js";
 
@@ -17,7 +17,8 @@ export async function run(argv: string[], context: CliContext): Promise<number> 
     return 1;
   }
   const configDir = resolveConfigDir(context.env, context.homeDir);
-  const result = await report({ configDir, now: context.now() });
+  const configFile = resolveConfigFile(context.env, context.homeDir);
+  const result = await report({ configDir, configFile, now: context.now() });
   context.stdout(flags.includes("--json") ? formatStatsJson(result) : formatStatsText(result));
   return 0;
 }
