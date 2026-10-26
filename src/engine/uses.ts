@@ -18,9 +18,10 @@ export function entryTimestamp(entry: TranscriptEntry): Date | null {
 
 export function usesIn(entry: TranscriptEntry): Use[] {
   const at = entryTimestamp(entry);
-  if (entry.type !== "assistant" || at === null) return [];
+  if (at === null) return [];
   const content = (entry.message as { content?: unknown } | undefined)?.content;
-  if (!Array.isArray(content)) return [];
+  if (entry.type === "user") return slashCommandsIn(content, at);
+  if (entry.type !== "assistant" || !Array.isArray(content)) return [];
   const uses: Use[] = [];
   for (const block of content) {
     if (block?.type !== "tool_use") continue;
@@ -31,4 +32,18 @@ export function usesIn(entry: TranscriptEntry): Use[] {
     }
   }
   return uses;
+}
+
+const COMMAND_NAME = /<command-name>\/([^<\s]+)<\/command-name>/g;
+
+function slashCommandsIn(content: unknown, at: Date): Use[] {
+  const texts =
+    typeof content === "string"
+      ? [content]
+      : Array.isArray(content)
+        ? content.filter((block) => block?.type === "text").map((block) => String(block.text))
+        : [];
+  return texts.flatMap((text) =>
+    [...text.matchAll(COMMAND_NAME)].map((match): Use => ({ kind: "invoke", name: match[1]!, at })),
+  );
 }

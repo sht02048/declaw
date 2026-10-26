@@ -209,6 +209,19 @@ export function userPrompt(text: string, timestamp: string): TranscriptLine {
   };
 }
 
+export function slashCommand(
+  name: string,
+  timestamp: string,
+  { args }: { args?: string } = {},
+): TranscriptLine {
+  const tags = [
+    `<command-message>${name}</command-message>`,
+    `<command-name>/${name}</command-name>`,
+    ...(args === undefined ? [] : [`<command-args>${args}</command-args>`]),
+  ];
+  return userPrompt(tags.join("\n"), timestamp);
+}
+
 export function hookRun(hookEvent: string, timestamp: string): TranscriptLine {
   return {
     type: "attachment",
