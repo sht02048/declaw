@@ -1,9 +1,11 @@
 import { dirname, join } from "node:path";
 import { findStandaloneSkills } from "./inventory.js";
 import { partiallyReadable, readable, type ReadStatus } from "./read-status.js";
-import { readSkillLastUses } from "./skill-usage.js";
+import { readSkillUsageCounter } from "./skill-usage.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
+
+export type { ReadStatus } from "./read-status.js";
 
 export interface ReportOptions {
   configDir: string;
@@ -16,16 +18,16 @@ export interface CoveredPeriod {
   end: Date;
 }
 
+export type Unknown = "unknown";
+
 export interface StandaloneSkill {
   kind: "standalone-skill";
   name: string;
   uses: number;
-  lastUse: Date | null;
+  lastUse: Date | null | Unknown;
 }
 
 export type Installation = StandaloneSkill;
-
-export type { ReadStatus } from "./read-status.js";
 
 export interface DataSources {
   transcripts: ReadStatus;
@@ -62,11 +64,8 @@ export async function report({
     }
   }
 
-  const skillLastUses = await readSkillLastUses(configFile);
-  for (const [name, stats] of usage) {
-    const counted = skillLastUses.get(name);
-    if (counted && (stats.lastUse === null || counted > stats.lastUse)) stats.lastUse = counted;
-  }
+  const counter = await readSkillUsageCounter(configFile);
+  const counterReadable = counter.status.status !== "unreadable";
 
   return {
     period: { start, end: now },
@@ -77,12 +76,24 @@ export async function report({
           : partiallyReadable(
               `${skippedLines} unparsable transcript ${skippedLines === 1 ? "line" : "lines"} skipped`,
             ),
-      skillUsageCounter: readable,
+      skillUsageCounter: counter.status,
     },
-    installations: skills.map((skill) => ({
-      kind: "standalone-skill",
-      name: skill.name,
-      ...usage.get(skill.name)!,
-    })),
+    installations: skills.map((skill) => {
+      const { uses, lastUse } = usage.get(skill.name)!;
+      return {
+        kind: "standalone-skill",
+        name: skill.name,
+        uses,
+        lastUse: counterReadable
+          ? later(lastUse, counter.lastUses.get(skill.name) ?? null)
+          : (lastUse ?? "unknown"),
+      };
+    }),
   };
+}
+
+function later(a: Date | null, b: Date | null): Date | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }

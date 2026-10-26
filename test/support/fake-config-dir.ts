@@ -50,6 +50,17 @@ export class FakeConfigDir {
     return this;
   }
 
+  async corruptConfigFile(): Promise<this> {
+    const config = JSON.stringify({ ...SENSITIVE_CONFIG_FILE_KEYS, skillUsage: {} });
+    await writeFile(this.configFile, config.slice(0, config.length / 2));
+    return this;
+  }
+
+  async removeConfigFile(): Promise<this> {
+    await rm(this.configFile);
+    return this;
+  }
+
   async pluginUsage(plugin: string, lastUsedAt: string, usageCount = 1): Promise<this> {
     const config = JSON.parse(await readFile(this.configFile, "utf8"));
     config.pluginUsage = {

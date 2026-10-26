@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { report } from "../../src/engine/index.js";
 import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
@@ -223,6 +224,64 @@ describe("report: read status of each data source", () => {
         uses: 2,
         lastUse: new Date("2026-10-09T10:30:00.000Z"),
       },
+    ]);
+  });
+
+  it("marks a corrupt counter file unreadable and shows a last Use it alone could know as unknown", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.standaloneSkill("orca-linear");
+    await config.corruptConfigFile();
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.skillUsageCounter).toEqual({
+      status: "unreadable",
+      reason: "config file is not valid JSON",
+    });
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "linear-ticket",
+        uses: 1,
+        lastUse: new Date("2026-10-09T10:30:00.000Z"),
+      },
+      { kind: "standalone-skill", name: "orca-linear", uses: 0, lastUse: "unknown" },
+    ]);
+  });
+
+  it("marks a missing counter file unreadable rather than treating it as no history", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await config.removeConfigFile();
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.skillUsageCounter).toEqual({
+      status: "unreadable",
+      reason: "config file not found",
+    });
+    expect(result.installations).toEqual([
+      { kind: "standalone-skill", name: "orca-linear", uses: 0, lastUse: "unknown" },
+    ]);
+  });
+
+  it("marks the counter unreadable when skillUsage is not a record of skills", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("orca-linear");
+    await writeFile(config.configFile, JSON.stringify({ skillUsage: [1, 2, 3] }));
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.skillUsageCounter).toEqual({
+      status: "unreadable",
+      reason: "skillUsage in config file is not an object",
+    });
+    expect(result.installations).toEqual([
+      { kind: "standalone-skill", name: "orca-linear", uses: 0, lastUse: "unknown" },
     ]);
   });
 });
