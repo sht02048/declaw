@@ -1,12 +1,8 @@
+import { UsageLedger } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
-
-interface UsageTally {
-  uses: number;
-  lastUse: Date | null;
-}
 
 export interface ReportOptions {
   configDir: string;
@@ -54,25 +50,14 @@ export interface Report {
 export async function report({ configDir, now }: ReportOptions): Promise<Report> {
   const plugins = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
-  const usage = new Map<string, UsageTally>();
-  for (const skill of skills) usage.set(skill.name, { uses: 0, lastUse: null });
-  for (const plugin of plugins) {
-    for (const component of plugin.components) {
-      if (SKILL_TOOL_KINDS.has(component.kind)) usage.set(component.name, { uses: 0, lastUse: null });
-    }
-  }
+  const usage = new UsageLedger(plugins, skills);
   let start: Date | null = null;
 
   for (const file of await findMainTranscripts(configDir)) {
     for await (const entry of readTranscript(file)) {
       const at = entryTimestamp(entry);
       if (at !== null && (start === null || at < start)) start = at;
-      for (const use of usesIn(entry)) {
-        const stats = usage.get(use.name);
-        if (!stats) continue;
-        stats.uses += 1;
-        if (stats.lastUse === null || use.at > stats.lastUse) stats.lastUse = use.at;
-      }
+      for (const use of usesIn(entry)) usage.record(use);
     }
   }
 
@@ -83,7 +68,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
       ...skills.map((skill): StandaloneSkill => ({
         kind: "standalone-skill",
         name: skill.name,
-        ...usage.get(skill.name)!,
+        ...usage.skill(skill.name),
         ...(skill.linked && { linked: skill.linked }),
         ...(skill.synced && { synced: skill.synced }),
       })),
@@ -91,13 +76,11 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   };
 }
 
-const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
-
-function pluginInstallation(plugin: PluginEntry, usage: Map<string, UsageTally>): Plugin {
+function pluginInstallation(plugin: PluginEntry, usage: UsageLedger): Plugin {
   const components = plugin.components.map(
     (component): Component => ({
       ...component,
-      ...(usage.get(component.name) ?? { uses: 0, lastUse: null }),
+      ...usage.component(component),
     }),
   );
   let uses = 0;

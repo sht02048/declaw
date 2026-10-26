@@ -222,3 +222,31 @@ export function hookRun(hookEvent: string, timestamp: string): TranscriptLine {
     },
   };
 }
+
+export function agentToolCall(
+  subagentType: string,
+  timestamp: string,
+  { tool = "Agent" }: { tool?: "Agent" | "Task" } = {},
+): TranscriptLine {
+  toolUseCounter += 1;
+  return {
+    type: "assistant",
+    timestamp,
+    isSidechain: false,
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_use",
+          id: `toolu_${toolUseCounter}`,
+          name: tool,
+          input: {
+            subagent_type: subagentType,
+            description: `Run ${subagentType}`,
+            prompt: "Do the delegated work.",
+          },
+        },
+      ],
+    },
+  };
+}
