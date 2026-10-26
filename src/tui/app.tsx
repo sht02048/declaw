@@ -1,5 +1,5 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
-import { useEffect, useReducer, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import wrapAnsi from "wrap-ansi";
 import {
   isRemovable,
@@ -17,6 +17,9 @@ import {
   columnHeader,
   columnsFor,
   componentLine,
+  countsLine,
+  groupedByUsageStatus,
+  groupHeader,
   hooksLine,
   installationLine,
   isChild,
@@ -36,6 +39,7 @@ type Screen = "list" | "confirm" | "running" | "summary";
 
 interface Line {
   key: string;
+  element?: ReactNode;
   content?: ReactNode;
   text?: string;
   style?: "bold" | "dim" | "warning";
@@ -56,7 +60,7 @@ const CONFIRM_KEYS = `y run the Cleanup · ${DRY_RUN_KEYS}`;
 const SUMMARY_KEYS = "up/down scroll · q quit";
 
 export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
-  const { installations } = report;
+  const installations = useMemo(() => groupedByUsageStatus(report.installations), [report]);
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
   const [state, dispatch] = useReducer(reducerFor(installations, dryRun), INITIAL_STATE);
@@ -75,9 +79,6 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
         </>
       ),
     },
-    ...formatSources(report.sources, { problemsOnly: true }).map(
-      (text): Line => ({ key: text, content: text, style: "warning" }),
-    ),
   ];
 
   useEffect(() => {
@@ -89,6 +90,7 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
     dryRun,
     now,
     columns,
+    problems: formatSources(report.sources, { problemsOnly: true }),
   });
   const footer = footerOf(state, dryRun);
   const fixed = [...header, ...body.header, ...footer];
@@ -138,7 +140,9 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   return (
     <Box flexDirection="column">
       {[...header, ...body.header, ...shown, ...footer].map((line) =>
-        line.text !== undefined ? (
+        line.element !== undefined ? (
+          <Box key={line.key}>{line.element}</Box>
+        ) : line.text !== undefined ? (
           <Text key={line.key} bold={line.style === "bold"} dimColor={line.style === "dim"}>
             {line.text === "" ? " " : line.text}
           </Text>
@@ -281,49 +285,80 @@ interface Layout {
   dryRun: boolean;
   now: Date;
   columns: number;
+  problems: string[];
 }
 
 function listLines(
   installations: Installation[],
   { cursor, selection, expanded }: State,
-  { now, columns: width }: Layout,
+  { now, columns: width, problems }: Layout,
 ): Body {
   const columns = columnsFor(installations, now, width);
   const listRows = listRowsOf(installations, expanded);
-  const lines = listRows.map((listRow, line): Line => {
+  const lines: Line[] = [];
+  let focus = 0;
+  let focusEnd = 0;
+  listRows.forEach((listRow, row) => {
     const installation = installations[listRow.index]!;
-    const onCursor = line === cursor;
-    if (listRow.hooks && installation.kind === "plugin") {
-      return { key: `${installation.name} hooks`, content: hooksLine(installation.hooks, onCursor) };
+    const onCursor = row === cursor;
+    const previous = listRows[row - 1];
+    if (!isChild(listRow) && installations[previous?.index ?? -1]?.usageStatus !== installation.usageStatus) {
+      const status = installation.usageStatus;
+      if (lines.length > 0) lines.push({ key: `${status} gap`, content: "" });
+      if (onCursor) focus = lines.length;
+      lines.push({
+        key: status,
+        content: groupHeader(status, installations.filter((i) => i.usageStatus === status).length),
+      });
+    } else if (onCursor) {
+      focus = lines.length;
     }
-    if (listRow.component !== undefined) {
+    if (onCursor || (focusEnd === lines.length - 1 && row > cursor && isChild(listRow) && !isChild(listRows[cursor]))) {
+      focusEnd = lines.length;
+    }
+    if (listRow.hooks && installation.kind === "plugin") {
+      lines.push({ key: `${installation.name} hooks`, content: hooksLine(installation.hooks, onCursor) });
+    } else if (listRow.component !== undefined) {
       const component = installation.kind === "plugin" ? installation.components[listRow.component] : undefined;
-      return {
+      lines.push({
         key: `${installation.name} ${component ? `${component.kind} ${component.name}` : "none"}`,
         content: componentLine(component, { onCursor, columns, now }),
-      };
+      });
+    } else {
+      lines.push({
+        key: installation.name,
+        content: installationLine(installation, {
+          onCursor,
+          selected: selection.has(installation.name),
+          columns,
+          now,
+        }),
+      });
     }
-    return {
-      key: installation.name,
-      content: installationLine(installation, {
-        onCursor,
-        selected: selection.has(installation.name),
-        columns,
-        now,
-      }),
-    };
   });
-  let focusEnd = cursor;
-  if (!isChild(listRows[cursor])) {
-    while (isChild(listRows[focusEnd + 1])) focusEnd += 1;
-  }
   return {
     header: [
+      {
+        key: "counts",
+        element: (
+          <>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text wrap="truncate-end">{countsLine(installations)}</Text>
+            </Box>
+            <Box flexShrink={0} marginLeft={2}>
+              <Text bold={selection.size > 0} dimColor={selection.size === 0}>
+                {`${selection.size} selected`}
+              </Text>
+            </Box>
+          </>
+        ),
+      },
+      ...problems.map((text): Line => ({ key: text, content: text, style: "warning" })),
       { key: "gap", content: "" },
       { key: "columns", content: columnHeader(columns) },
     ],
     lines,
-    focus: cursor,
+    focus,
     focusEnd,
   };
 }

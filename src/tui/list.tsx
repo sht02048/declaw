@@ -1,7 +1,7 @@
 import { Text } from "ink";
 import type { ReactNode } from "react";
-import { isRemovable, type Component, type Installation } from "../engine/index.js";
-import { formatHooksPerSession, installNote } from "../cli/format.js";
+import { isRemovable, type Component, type Installation, type UsageStatus } from "../engine/index.js";
+import { formatHooksPerSession, installNote, USAGE_STATUS_LABELS } from "../cli/format.js";
 import { fit, formatLastUseAgo } from "./text.js";
 
 export interface ListRow {
@@ -27,6 +27,48 @@ export function isChild(listRow: ListRow | undefined): boolean {
 }
 
 export const ACCENT = "cyan";
+
+export const STATUS_ORDER: UsageStatus[] = ["unused", "used", "too-new", "unknown"];
+
+export const STATUS_COLORS: Record<UsageStatus, string> = {
+  unused: "yellow",
+  used: "green",
+  "too-new": "cyan",
+  unknown: "gray",
+};
+
+export function groupedByUsageStatus(installations: Installation[]): Installation[] {
+  return STATUS_ORDER.flatMap((status) => installations.filter((i) => i.usageStatus === status));
+}
+
+export function countsLine(installations: Installation[]): ReactNode {
+  const counts = STATUS_ORDER.map((status) => ({
+    status,
+    count: installations.filter((i) => i.usageStatus === status).length,
+  })).filter(({ status, count }) => status !== "unknown" || count > 0);
+  const recommended = installations.filter((i) => i.recommended).length;
+  return (
+    <>
+      {counts.map(({ status, count }, index) => (
+        <Text key={status} color={STATUS_COLORS[status]}>
+          {index > 0 && "  "}
+          {`${count} ${USAGE_STATUS_LABELS[status]}`}
+        </Text>
+      ))}
+      <Text dimColor>{` · ${recommended} recommended`}</Text>
+    </>
+  );
+}
+
+export function groupHeader(status: UsageStatus, count: number): ReactNode {
+  return (
+    <Text color={STATUS_COLORS[status]}>
+      {"  "}
+      <Text bold>{USAGE_STATUS_LABELS[status]}</Text>
+      {`  ${count}`}
+    </Text>
+  );
+}
 
 interface Kind {
   label: string;

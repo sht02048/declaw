@@ -343,6 +343,33 @@ describe("TUI Cleanup", () => {
   });
 });
 
+describe("TUI groups", () => {
+  it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used {2}0 Too New · 2 recommended\s+0 selected$/);
+
+    await press(stdin, "r");
+
+    expect(lastFrame()!.split("\n")[1]).toMatch(/\s2 selected$/);
+  });
+
+  it("lists Installations under a header per Usage Status that the cursor skips", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const lines = () => lastFrame()!.split("\n");
+
+    expect(lines().map((line) => line.trim())).toEqual(expect.arrayContaining(["Unused  3", "Used  1"]));
+
+    await press(stdin, DOWN, DOWN, DOWN);
+
+    const cursorLine = lines().findIndex((line) => line.startsWith("›"));
+    expect(lines()[cursorLine]).toContain("vercel@market");
+    expect(lines()[cursorLine - 1]!.trim()).toBe("Used  1");
+  });
+});
+
 describe("TUI layout", () => {
   it("keeps every line on one terminal row, truncating long names with an ellipsis", async () => {
     const config = await fakeConfigDir();
