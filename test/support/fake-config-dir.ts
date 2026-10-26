@@ -50,6 +50,16 @@ export class FakeConfigDir {
     return this;
   }
 
+  async pluginUsage(plugin: string, lastUsedAt: string, usageCount = 1): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    config.pluginUsage = {
+      ...config.pluginUsage,
+      [plugin]: { usageCount, lastUsedAt: new Date(lastUsedAt).getTime() },
+    };
+    await writeFile(this.configFile, JSON.stringify(config));
+    return this;
+  }
+
   async transcript(
     { project, session }: TranscriptLocation,
     lines: TranscriptLine[],
