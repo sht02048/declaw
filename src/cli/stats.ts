@@ -5,6 +5,7 @@ export function formatStatsJson(report: Report): string {
 }
 
 const KIND_LABELS: Record<Installation["kind"], string> = {
+  plugin: "Plugin",
   "standalone-skill": "Standalone Skill",
 };
 

@@ -1,4 +1,5 @@
 import { findStandaloneSkills } from "./inventory.js";
+import { findPlugins } from "./plugins.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
@@ -19,7 +20,14 @@ export interface StandaloneSkill {
   lastUse: Date | null;
 }
 
-export type Installation = StandaloneSkill;
+export interface Plugin {
+  kind: "plugin";
+  name: string;
+  uses: number;
+  lastUse: Date | null;
+}
+
+export type Installation = Plugin | StandaloneSkill;
 
 export interface Report {
   period: CoveredPeriod;
@@ -27,6 +35,7 @@ export interface Report {
 }
 
 export async function report({ configDir, now }: ReportOptions): Promise<Report> {
+  const plugins = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
   const usage = new Map<string, { uses: number; lastUse: Date | null }>();
   for (const skill of skills) usage.set(skill.name, { uses: 0, lastUse: null });
@@ -47,10 +56,18 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
 
   return {
     period: { start, end: now },
-    installations: skills.map((skill) => ({
-      kind: "standalone-skill",
-      name: skill.name,
-      ...usage.get(skill.name)!,
-    })),
+    installations: [
+      ...plugins.map((plugin): Plugin => ({
+        kind: "plugin",
+        name: plugin.key,
+        uses: 0,
+        lastUse: null,
+      })),
+      ...skills.map((skill): StandaloneSkill => ({
+        kind: "standalone-skill",
+        name: skill.name,
+        ...usage.get(skill.name)!,
+      })),
+    ],
   };
 }

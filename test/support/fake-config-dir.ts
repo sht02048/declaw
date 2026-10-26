@@ -10,8 +10,42 @@ export interface TranscriptLocation {
   session: string;
 }
 
+export interface PluginFixture {
+  scope?: "user" | "project" | "local";
+  version?: string;
+  installedAt?: string;
+}
+
+type JsonObject = Record<string, unknown>;
+
 export class FakeConfigDir {
+  private readonly installRecords: Record<string, JsonObject[]> = {};
+
   constructor(readonly path: string) {}
+
+  async plugin(key: string, fixture: PluginFixture = {}): Promise<this> {
+    const [name, marketplace] = key.split("@") as [string, string];
+    const version = fixture.version ?? "1.0.0";
+    const installPath = join(this.path, "plugins", "cache", marketplace, name, version);
+    await mkdir(installPath, { recursive: true });
+    await writeJson(join(installPath, ".claude-plugin", "plugin.json"), { name });
+
+    const scope = fixture.scope ?? "user";
+    const installedAt = fixture.installedAt ?? "2026-09-01T00:00:00.000Z";
+    (this.installRecords[key] ??= []).push({
+      scope,
+      ...(scope === "user" ? {} : { projectPath: "/work/app" }),
+      installPath,
+      version,
+      installedAt,
+      lastUpdated: installedAt,
+    });
+    await writeJson(join(this.path, "plugins", "installed_plugins.json"), {
+      version: 2,
+      plugins: this.installRecords,
+    });
+    return this;
+  }
 
   async standaloneSkill(name: string): Promise<this> {
     await writeSkillFolder(join(this.path, "skills", name), name);
@@ -59,6 +93,11 @@ async function writeSkillFolder(dir: string, name: string): Promise<void> {
     join(dir, "SKILL.md"),
     `---\nname: ${name}\ndescription: ${name} skill\n---\n\nDo the ${name} thing.\n`,
   );
+}
+
+async function writeJson(file: string, value: unknown): Promise<void> {
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(value, null, 2));
 }
 
 function encodeProjectDir(cwd: string): string {
