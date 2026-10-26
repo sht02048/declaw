@@ -1,6 +1,6 @@
 import type { Dirent } from "node:fs";
 import { readlink, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { listDir } from "./fs.js";
 
 const SYNCED_SKILLS_DIR = "synced";
@@ -20,7 +20,8 @@ export async function findStandaloneSkills(configDir: string): Promise<Standalon
     if (entry.isDirectory()) {
       skills.push({ name: entry.name, path });
     } else if (await isLinkToFolder(entry, path)) {
-      skills.push({ name: entry.name, path, linked: { target: await readlink(path) } });
+      const target = resolve(skillsDir, await readlink(path));
+      skills.push({ name: entry.name, path, linked: { target } });
     }
   }
   return skills.sort((a, b) => a.name.localeCompare(b.name));

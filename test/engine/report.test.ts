@@ -127,4 +127,25 @@ describe("report: Linked Skills and Synced Skills", () => {
       },
     ]);
   });
+
+  it("shows the absolute target of a relative link into a personal repository", async () => {
+    const config = await fakeConfigDir();
+    const target = join(config.home, "code", "my-skills", "release-notes");
+    await config.linkedSkill("release-notes", { target, relative: true });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("release-notes", "2026-10-06T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "release-notes",
+        uses: 1,
+        lastUse: new Date("2026-10-06T09:00:00.000Z"),
+        linked: { target },
+      },
+    ]);
+  });
 });
