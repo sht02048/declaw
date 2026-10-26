@@ -23,6 +23,8 @@ export interface StandaloneSkill {
   name: string;
   uses: number;
   lastUse: Date | null;
+  linked?: { target: string };
+  synced?: true;
 }
 
 export interface Component {
@@ -82,6 +84,8 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
         kind: "standalone-skill",
         name: skill.name,
         ...usage.get(skill.name)!,
+        ...(skill.linked && { linked: skill.linked }),
+        ...(skill.synced && { synced: skill.synced }),
       })),
     ],
   };

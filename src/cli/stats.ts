@@ -9,6 +9,20 @@ const KIND_LABELS: Record<Installation["kind"], string> = {
   "standalone-skill": "Standalone Skill",
 };
 
+function kindLabel(installation: Installation): string {
+  if (installation.kind === "plugin") return KIND_LABELS.plugin;
+  if (installation.linked) return "Linked Skill";
+  if (installation.synced) return "Synced Skill";
+  return KIND_LABELS[installation.kind];
+}
+
+function note(installation: Installation): string {
+  if (installation.kind === "plugin") return "";
+  if (installation.linked) return `links to ${installation.linked.target}`;
+  if (installation.synced) return "managed by claude.ai";
+  return "";
+}
+
 export function formatStatsText(report: Report): string {
   const { start, end } = report.period;
   const header =
@@ -17,13 +31,14 @@ export function formatStatsText(report: Report): string {
       : `Usage Stats from ${formatDate(start)} to ${formatDate(end)}`;
 
   const rows = [
-    ["KIND", "NAME", "USES", "LAST USE", "HOOKS"],
+    ["KIND", "NAME", "USES", "LAST USE", "HOOKS", "NOTE"],
     ...report.installations.map((installation) => [
-      KIND_LABELS[installation.kind],
+      kindLabel(installation),
       installation.name,
       String(installation.uses),
       installation.lastUse === null ? "never" : formatDate(installation.lastUse),
       installation.kind === "plugin" ? String(installation.hooks) : "",
+      note(installation),
     ]),
   ];
   const widths = rows[0]!.map((_, column) => Math.max(...rows.map((row) => row[column]!.length)));

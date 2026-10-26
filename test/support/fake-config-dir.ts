@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative as relativePath } from "node:path";
 import { onTestFinished } from "vitest";
 
 export type TranscriptLine = Record<string, unknown>;
@@ -108,16 +108,23 @@ export class FakeConfigDir {
     return this;
   }
 
+  get home(): string {
+    return dirname(this.path);
+  }
+
   async standaloneSkill(name: string): Promise<this> {
     await writeSkillFolder(join(this.path, "skills", name), name);
     return this;
   }
 
-  async linkedSkill(name: string): Promise<this> {
-    const target = join(dirname(this.path), ".agents", "skills", name);
+  async linkedSkill(
+    name: string,
+    { target = join(this.home, ".agents", "skills", name), relative = false } = {},
+  ): Promise<this> {
     await writeSkillFolder(target, name);
-    await mkdir(join(this.path, "skills"), { recursive: true });
-    await symlink(target, join(this.path, "skills", name));
+    const skillsDir = join(this.path, "skills");
+    await mkdir(skillsDir, { recursive: true });
+    await symlink(relative ? relativePath(skillsDir, target) : target, join(skillsDir, name));
     return this;
   }
 
