@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { report, type Plugin, type Report } from "../../src/engine/index.js";
-import { fakeConfigDir } from "../support/fake-config-dir.js";
+import { fakeConfigDir, skillToolCall } from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
 
@@ -178,5 +178,53 @@ describe("report: Plugin Inventory", () => {
     expect(
       Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.hooks])),
     ).toEqual({ "oh-my-claudecode@omc": 4, "quiet@market": 0 });
+  });
+});
+
+describe("report: plugin skill Uses", () => {
+  it("counts a plugin-qualified Skill tool call as a Use of its Component and Plugin, by manifest name", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("omc-tools@omc", {
+      manifest: { name: "oh-my-claudecode" },
+      skills: ["plan", "review", "ralph"],
+      agents: ["executor"],
+    });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("oh-my-claudecode:plan", "2026-10-02T09:00:00.000Z"),
+      skillToolCall("omc-tools:plan", "2026-10-03T09:00:00.000Z"),
+    ]);
+    await config.transcript({ project: "/work/site", session: "s2" }, [
+      skillToolCall("oh-my-claudecode:review", "2026-10-11T09:00:00.000Z"),
+      skillToolCall("oh-my-claudecode:plan", "2026-10-07T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)).toEqual([
+      {
+        kind: "plugin",
+        name: "omc-tools@omc",
+        enabled: true,
+        hooks: 0,
+        uses: 3,
+        lastUse: new Date("2026-10-11T09:00:00.000Z"),
+        components: [
+          {
+            kind: "skill",
+            name: "oh-my-claudecode:plan",
+            uses: 2,
+            lastUse: new Date("2026-10-07T09:00:00.000Z"),
+          },
+          { kind: "skill", name: "oh-my-claudecode:ralph", uses: 0, lastUse: null },
+          {
+            kind: "skill",
+            name: "oh-my-claudecode:review",
+            uses: 1,
+            lastUse: new Date("2026-10-11T09:00:00.000Z"),
+          },
+          { kind: "agent", name: "oh-my-claudecode:executor", uses: 0, lastUse: null },
+        ],
+      },
+    ]);
   });
 });
