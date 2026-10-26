@@ -145,6 +145,30 @@ export class FakeConfigDir {
     await writeFile(file, sessionLines.map((line) => JSON.stringify(line)).join("\n") + "\n");
     return this;
   }
+
+  async subagentTranscript(
+    { project, session, agentId }: TranscriptLocation & { agentId: string },
+    lines: TranscriptLine[],
+  ): Promise<this> {
+    const file = join(
+      this.path,
+      "projects",
+      encodeProjectDir(project),
+      session,
+      "subagents",
+      `agent-${agentId}.jsonl`,
+    );
+    await mkdir(dirname(file), { recursive: true });
+    const agentLines = lines.map((line) => ({
+      ...line,
+      sessionId: session,
+      cwd: project,
+      agentId,
+      isSidechain: true,
+    }));
+    await writeFile(file, agentLines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    return this;
+  }
 }
 
 export async function fakeConfigDir(): Promise<FakeConfigDir> {

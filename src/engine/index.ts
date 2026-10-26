@@ -1,7 +1,7 @@
 import { UsageLedger } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginEntry } from "./plugins.js";
-import { findMainTranscripts, readTranscript } from "./transcripts.js";
+import { findTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
 
 export interface ReportOptions {
@@ -53,7 +53,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   const usage = new UsageLedger(plugins, skills);
   let start: Date | null = null;
 
-  for (const file of await findMainTranscripts(configDir)) {
+  for (const file of await findTranscripts(configDir)) {
     for await (const entry of readTranscript(file)) {
       const at = entryTimestamp(entry);
       if (at !== null && (start === null || at < start)) start = at;

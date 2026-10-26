@@ -4,6 +4,7 @@ import {
   agentToolCall,
   fakeConfigDir,
   mcpToolCall,
+  skillToolCall,
   slashCommand,
 } from "../support/fake-config-dir.js";
 
@@ -170,6 +171,33 @@ describe("report: MCP tool Uses", () => {
           { name: "vercel:vercel", uses: 1, lastUse: new Date("2026-10-07T09:00:00.000Z") },
         ],
       },
+    ]);
+  });
+});
+
+describe("report: Uses inside subagents", () => {
+  it("counts skill, agent, and MCP Uses from subagent transcripts", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("oh-my-claudecode@omc", {
+      agents: ["executor", "verifier"],
+      mcpServers: { t: { command: "node" } },
+    });
+    await config.standaloneSkill("linear-ticket");
+    const session = { project: "/work/app", session: "s1" };
+    await config.transcript(session, [
+      agentToolCall("oh-my-claudecode:executor", "2026-10-05T09:00:00.000Z"),
+    ]);
+    await config.subagentTranscript({ ...session, agentId: "a6281cd425c660124" }, [
+      skillToolCall("linear-ticket", "2026-10-05T09:01:00.000Z"),
+      agentToolCall("oh-my-claudecode:verifier", "2026-10-05T09:02:00.000Z"),
+      mcpToolCall("mcp__plugin_oh-my-claudecode_t__lsp_hover", "2026-10-05T09:03:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations.map(({ name, uses, lastUse }) => ({ name, uses, lastUse }))).toEqual([
+      { name: "oh-my-claudecode@omc", uses: 3, lastUse: new Date("2026-10-05T09:03:00.000Z") },
+      { name: "linear-ticket", uses: 1, lastUse: new Date("2026-10-05T09:01:00.000Z") },
     ]);
   });
 });
