@@ -3,7 +3,7 @@ import { UsageLedger, type UsageTally } from "./attribution.js";
 import { findStandaloneSkills } from "./inventory.js";
 import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
-import { readSkillUsageCounter, type SkillUsageCounterRead } from "./skill-usage.js";
+import { lastUseOf, later, readSkillUsageCounter } from "./skill-usage.js";
 import { judge, sortForCleanup, type UsageStatus } from "./usage-status.js";
 import { findTranscripts, readTranscript } from "./transcripts.js";
 import { lineTimestamp, usesIn } from "./uses.js";
@@ -216,23 +216,4 @@ async function readTranscriptUsage(configDir: string, ledger: UsageLedger): Prom
   ].filter((problem) => problem !== false);
   const status = problems.length === 0 ? readable : partiallyReadable(problems.join("; "));
   return { status, start, ledger };
-}
-
-function lastUseOf(
-  name: string,
-  inPeriod: UsageTally | null,
-  counter: SkillUsageCounterRead,
-): Date | null | Unknown {
-  const counterKnows = counter.status.status !== "unreadable" && !counter.skippedSkills.has(name);
-  if (counterKnows) {
-    if (inPeriod === null) return counter.lastUses.get(name) ?? "unknown";
-    return later(inPeriod.lastUse, counter.lastUses.get(name) ?? null);
-  }
-  return inPeriod?.lastUse ?? "unknown";
-}
-
-function later(a: Date | null, b: Date | null): Date | null {
-  if (a === null) return b;
-  if (b === null) return a;
-  return a > b ? a : b;
 }

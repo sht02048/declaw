@@ -6,6 +6,7 @@ import {
   readJsonFile,
   unreadable,
   type ReadStatus,
+  type Unknown,
 } from "./read-status.js";
 
 export type SkillLastUses = Map<string, Date>;
@@ -46,4 +47,23 @@ export async function readSkillUsageCounter(configFile: string): Promise<SkillUs
       ? readable
       : partiallyReadable(`${skipped} unreadable skillUsage ${plural(skipped, "record")} skipped`);
   return { status, lastUses, skippedSkills };
+}
+
+export function lastUseOf(
+  name: string,
+  inPeriod: { lastUse: Date | null } | null,
+  counter: SkillUsageCounterRead,
+): Date | null | Unknown {
+  const counterKnows = counter.status.status !== "unreadable" && !counter.skippedSkills.has(name);
+  if (counterKnows) {
+    if (inPeriod === null) return counter.lastUses.get(name) ?? "unknown";
+    return later(inPeriod.lastUse, counter.lastUses.get(name) ?? null);
+  }
+  return inPeriod?.lastUse ?? "unknown";
+}
+
+export function later(a: Date | null, b: Date | null): Date | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }
