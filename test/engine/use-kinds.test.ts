@@ -177,6 +177,29 @@ describe("report: MCP tool Uses", () => {
   });
 });
 
+describe("report: MCP tool Uses of Plugins whose names share a prefix", () => {
+  it("attributes an MCP tool call to the Plugin with the longest matching tool name prefix", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("a-kit@market", { manifest: { name: "kit" }, mcpServers: { db: { command: "db" } } });
+    await config.plugin("b-kit@market", {
+      manifest: { name: "kit_db_" },
+      mcpServers: { admin: { command: "admin" } },
+    });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__plugin_kit_db__query", "2026-10-05T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_kit_db__admin__run", "2026-10-06T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_kit_db__admin__stop", "2026-10-07T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(Object.fromEntries(plugins(result).map((plugin) => [plugin.name, plugin.uses]))).toEqual({
+      "a-kit@market": 1,
+      "b-kit@market": 2,
+    });
+  });
+});
+
 describe("report: Uses inside subagents", () => {
   it("counts skill, agent, and MCP Uses from subagent transcripts", async () => {
     const config = await fakeConfigDir();
