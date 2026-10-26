@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { report } from "../../src/engine/index.js";
 import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
@@ -70,19 +71,6 @@ describe("report: Standalone Skill Usage Stats", () => {
     });
   });
 
-  it("lists only real-folder Standalone Skills", async () => {
-    const config = await fakeConfigDir();
-    await config.standaloneSkill("linear-ticket");
-    await config.linkedSkill("find-skills");
-    await config.syncedSkill("docx");
-
-    const result = await report({ configDir: config.path, now });
-
-    expect(result.installations.map((installation) => installation.name)).toEqual([
-      "linear-ticket",
-    ]);
-  });
-
   it("reports an empty period when no transcripts exist yet", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("linear-ticket");
@@ -115,5 +103,28 @@ describe("report: Standalone Skill Usage Stats", () => {
       start: new Date("2026-09-28T07:15:00.000Z"),
       end: now,
     });
+  });
+});
+
+describe("report: Linked Skills and Synced Skills", () => {
+  it("labels a link into another tool's skill folder as a Linked Skill with its target", async () => {
+    const config = await fakeConfigDir();
+    await config.linkedSkill("find-skills");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("find-skills", "2026-10-04T09:00:00.000Z"),
+      skillToolCall("find-skills", "2026-10-11T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "find-skills",
+        uses: 2,
+        lastUse: new Date("2026-10-11T09:00:00.000Z"),
+        linked: { target: join(config.home, ".agents", "skills", "find-skills") },
+      },
+    ]);
   });
 });

@@ -13,6 +13,10 @@ export interface TranscriptLocation {
 export class FakeConfigDir {
   constructor(readonly path: string) {}
 
+  get home(): string {
+    return dirname(this.path);
+  }
+
   async standaloneSkill(name: string): Promise<this> {
     await writeSkillFolder(join(this.path, "skills", name), name);
     return this;

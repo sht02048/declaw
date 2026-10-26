@@ -17,6 +17,7 @@ export interface StandaloneSkill {
   name: string;
   uses: number;
   lastUse: Date | null;
+  linked?: { target: string };
 }
 
 export type Installation = StandaloneSkill;
@@ -51,6 +52,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
       kind: "standalone-skill",
       name: skill.name,
       ...usage.get(skill.name)!,
+      ...(skill.linked && { linked: skill.linked }),
     })),
   };
 }
