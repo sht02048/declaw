@@ -1,5 +1,6 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
 import { useReducer, useRef } from "react";
+import wrapAnsi from "wrap-ansi";
 import {
   isRemovable,
   planCleanup,
@@ -69,7 +70,8 @@ export function App({ report, configDir, dryRun }: AppProps) {
           { key: "keys", text: CONFIRM_KEYS, style: "dim" },
         ];
 
-  const heightOf = (line: Line) => Math.max(1, Math.ceil(line.text.length / Math.max(1, columns)));
+  const heightOf = (line: Line) =>
+    wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
   const room = Math.max(3, rows - 1 - [...header, ...footer].reduce((sum, line) => sum + heightOf(line), 0));
   const heights = body.lines.map(heightOf);
 

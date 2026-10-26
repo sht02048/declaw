@@ -137,6 +137,28 @@ describe("TUI in a short terminal", () => {
     expect(lastFrame()).toContain("big:f");
   });
 
+  it("fits a confirmation screen whose long paths wrap at word boundaries", async () => {
+    const config = await fakeConfigDir();
+    for (let index = 0; index < 6; index++) {
+      const folder = `${index}`.padEnd(Math.max(1, 90 - config.home.length - 1), "x");
+      await config.linkedSkill(`link-${index}`, { target: join(config.home, folder) });
+    }
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ configDir: config.path, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    Object.defineProperty(stdout, "rows", { value: 16 });
+    stdout.emit("resize");
+
+    await press(stdin, "r", ENTER);
+
+    for (let step = 0; step < 30; step++) {
+      expect(lastFrame()!.split("\n").length).toBeLessThanOrEqual(16);
+      await press(stdin, DOWN);
+    }
+  });
+
   it("scrolls a long confirmation screen under the covered period", async () => {
     const config = await fakeConfigDir();
     const names = Array.from({ length: 10 }, (_, index) => `skill-${String(index).padStart(2, "0")}`);
