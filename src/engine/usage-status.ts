@@ -11,13 +11,10 @@ interface Judgeable {
 
 export function withUsageStatus<T extends Judgeable>(
   installation: T,
-  periodStart: Date | null,
 ): T & { usageStatus: UsageStatus; recommended: boolean } {
-  const usageStatus = usageStatusOf(installation, periodStart);
+  const usageStatus = usageStatusOf(installation);
   const recommended =
-    (usageStatus === "unused" || installation.enabled === false) &&
-    usageStatus !== "too-new" &&
-    installation.synced !== true;
+    (usageStatus === "unused" || installation.enabled === false) && installation.synced !== true;
   return { ...installation, usageStatus, recommended };
 }
 
@@ -39,9 +36,7 @@ function timeOf(date: Date | null | Unknown): number {
   return date instanceof Date ? date.getTime() : -Infinity;
 }
 
-function usageStatusOf({ installedAt, lastUse }: Judgeable, periodStart: Date | null): UsageStatus {
-  if (periodStart !== null && installedAt !== null && installedAt > periodStart) return "too-new";
+function usageStatusOf({ lastUse }: Judgeable): UsageStatus {
   if (lastUse === "unknown") return "unknown";
-  if (lastUse !== null) return "used";
-  return periodStart === null ? "too-new" : "unused";
+  return lastUse === null ? "unused" : "used";
 }

@@ -112,20 +112,17 @@ export async function report({
     },
     installations: sortForCleanup<Installation>([
       ...plugins.map((plugin) =>
-        withUsageStatus(pluginInstallation(plugin, usageOf, transcripts), transcripts.start),
+        withUsageStatus(pluginInstallation(plugin, usageOf, transcripts)),
       ),
       ...skills.map((skill) =>
-        withUsageStatus(
-          {
+        withUsageStatus({
             kind: "standalone-skill" as const,
             name: skill.name,
             installedAt: skill.createdAt,
             ...usageOf(transcripts.tallies?.skill(skill.name) ?? null, skill.name),
             ...(skill.linked && { linked: skill.linked }),
             ...(skill.synced && { synced: skill.synced }),
-          },
-          transcripts.start,
-        ),
+          }),
       ),
     ]),
   };

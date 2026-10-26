@@ -129,7 +129,7 @@ describe("declaw stats", () => {
     expect(row("ux-writing")).toMatch(/^\*\s+Unused\s+Standalone Skill\s+ux-writing\s/);
     expect(row("switched-off@market")).toMatch(/^\*\s+Unused\s+Plugin\s+switched-off@market\s.*disabled$/);
     expect(row("linear-ticket")).toMatch(/^\s+Used\s+Standalone Skill\s+linear-ticket\s/);
-    expect(row("fresh-skill")).toMatch(/^\s+Too New\s+Standalone Skill\s+fresh-skill\s/);
+    expect(row("fresh-skill")).toMatch(/^\*\s+Unused\s+Standalone Skill\s+fresh-skill\s/);
     expect(stdout).toContain("* recommended for Cleanup");
   });
 
@@ -156,7 +156,7 @@ describe("declaw stats", () => {
     );
     expect(flags).toEqual([
       ["ux-writing", "unused", true],
-      ["fresh-skill", "too-new", false],
+      ["fresh-skill", "unused", true],
       ["linear-ticket", "used", false],
     ]);
   });
