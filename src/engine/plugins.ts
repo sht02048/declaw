@@ -68,7 +68,8 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
     if (!record || typeof record.installPath !== "string") continue;
     const root = record.installPath;
 
-    const manifest = await attempt(() => manifestOf(root, key, marketplaces));
+    const read = await attempt(() => manifestOf(root, key, marketplaces));
+    const manifest = read === "unknown" ? read : read.manifest;
     const setting = enabledPlugins?.[key];
     const enabled =
       typeof setting === "boolean"
@@ -79,7 +80,8 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
     const namespace = manifest !== "unknown" && typeof manifest.name === "string" ? manifest.name : pluginName(key);
     const components =
       manifest === "unknown" ? manifest : await attempt(() => findComponents(root, namespace, manifest));
-    const hooks = manifest === "unknown" ? manifest : await attempt(() => countHooks(root, manifest.hooks));
+    const hooks =
+      read === "unknown" ? read : await attempt(() => countHooks(root, read.manifest.hooks, read.entryHooks));
     const installedAt = dateIn(record.installedAt);
     plugins.push({ key, namespace, installedAt, enabled, hooks, components });
   }
@@ -99,11 +101,29 @@ export async function findPlugins(configDir: string): Promise<PluginInventory> {
   };
 }
 
-async function manifestOf(root: string, key: string, marketplaces: JsonObject | null): Promise<JsonObject> {
+interface ManifestRead {
+  manifest: JsonObject;
+  entryHooks?: unknown;
+}
+
+const APPENDED_FROM_ENTRY = ["skills", "commands", "agents"] as const;
+
+async function manifestOf(root: string, key: string, marketplaces: JsonObject | null): Promise<ManifestRead> {
   if (marketplaces === null) throw new Error("known marketplaces could not be read");
   const pluginJson = await readJson(join(root, ".claude-plugin", "plugin.json"));
   const entry = await marketplaceEntry(marketplaces, key);
-  return pluginJson === null || entry?.strict === false ? (entry ?? {}) : pluginJson;
+  if (pluginJson === null || entry?.strict === false) return { manifest: entry ?? {} };
+  if (entry === null) return { manifest: pluginJson };
+  const manifest = { ...pluginJson };
+  for (const field of APPENDED_FROM_ENTRY) {
+    if (entry[field] !== undefined) manifest[field] = [...listOf(pluginJson[field]), ...listOf(entry[field])];
+  }
+  return { manifest, entryHooks: entry.hooks };
+}
+
+function listOf(value: unknown): unknown[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 async function attempt<T>(read: () => Promise<T>): Promise<T | Unknown> {
@@ -166,29 +186,41 @@ async function mcpServerKeys(root: string, declared: unknown): Promise<string[]>
   return configs.flatMap((servers) => Object.keys(servers));
 }
 
-async function countHooks(root: string, declared: unknown): Promise<number> {
-  const configs = await mergedConfigs(root, join("hooks", "hooks.json"), declared, "hooks");
+async function countHooks(root: string, declared: unknown, entryHooks: unknown): Promise<number> {
+  const groupsByEvent = hookGroupsByEvent(await mergedConfigs(root, join("hooks", "hooks.json"), declared, "hooks"));
+  if (entryHooks !== undefined) {
+    for (const [event, groups] of hookGroupsByEvent(await mergedConfigs(root, null, entryHooks, "hooks"))) {
+      groupsByEvent.set(event, groups);
+    }
+  }
   let count = 0;
-  for (const events of configs) {
-    for (const groups of Object.values(events)) {
-      if (!Array.isArray(groups)) continue;
-      for (const group of groups) {
-        const hooks = asObject(group).hooks;
-        if (Array.isArray(hooks)) count += hooks.length;
-      }
+  for (const groups of groupsByEvent.values()) {
+    for (const group of groups) {
+      const hooks = asObject(group).hooks;
+      if (Array.isArray(hooks)) count += hooks.length;
     }
   }
   return count;
 }
 
+function hookGroupsByEvent(configs: JsonObject[]): Map<string, unknown[]> {
+  const groupsByEvent = new Map<string, unknown[]>();
+  for (const events of configs) {
+    for (const [event, groups] of Object.entries(events)) {
+      if (Array.isArray(groups)) groupsByEvent.set(event, [...(groupsByEvent.get(event) ?? []), ...groups]);
+    }
+  }
+  return groupsByEvent;
+}
+
 async function mergedConfigs(
   root: string,
-  defaultFile: string,
+  defaultFile: string | null,
   declared: unknown,
   wrapperKey: string,
 ): Promise<JsonObject[]> {
   const configs: JsonObject[] = [];
-  const defaultConfig = await readJson(join(root, defaultFile));
+  const defaultConfig = defaultFile === null ? null : await readJson(join(root, defaultFile));
   if (defaultConfig) configs.push(defaultConfig);
   for (const item of Array.isArray(declared) ? declared : [declared]) {
     if (typeof item === "string") {

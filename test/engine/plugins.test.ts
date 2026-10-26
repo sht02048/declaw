@@ -165,6 +165,50 @@ describe("report: Plugin Inventory", () => {
     ]);
   });
 
+  it("appends a strict marketplace entry's components to the manifest's", async () => {
+    const config = await fakeConfigDir();
+    const markdown = (name: string) => `---\nname: ${name}\n---\n`;
+    await config.plugin("kit@market", {
+      manifest: { name: "kit", commands: ["./commands/a.md"] },
+      skills: ["work"],
+      commands: ["a", "unlisted"],
+      marketplaceEntry: {
+        commands: ["./extra/b.md"],
+        skills: ["./more-skills"],
+        agents: ["./helpers/helper.md"],
+        mcpServers: { ignored: { type: "http", url: "https://ignored.example.com/mcp" } },
+      },
+      files: {
+        "extra/b.md": markdown("b"),
+        "more-skills/x/SKILL.md": markdown("x"),
+        "helpers/helper.md": markdown("helper"),
+      },
+    });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(plugins(result)[0]?.components.map(({ kind, name }) => `${kind} ${name}`)).toEqual([
+      "skill kit:work",
+      "skill kit:x",
+      "command kit:a",
+      "command kit:b",
+      "agent kit:helper",
+    ]);
+  });
+
+  it("lets a strict marketplace entry's hooks replace the manifest's hooks per event", async () => {
+    const config = await fakeConfigDir();
+    const hook = { type: "command", command: "true" };
+    await config.plugin("kit@market", {
+      hooks: { SessionStart: [{ hooks: [hook, hook] }], Stop: [{ hooks: [hook] }] },
+      marketplaceEntry: { hooks: { SessionStart: [{ hooks: [hook] }] } },
+    });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(plugins(result)[0]?.hooks).toBe(2);
+  });
+
   it("counts the hooks a Plugin runs from its hook configuration", async () => {
     const config = await fakeConfigDir();
     const command = (script: string) => ({
