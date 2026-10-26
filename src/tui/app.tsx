@@ -18,6 +18,7 @@ import {
   note,
   STATUS_LABELS,
 } from "../cli/format.js";
+import { formatCleanupSummary } from "../cli/summary.js";
 
 export interface AppProps {
   report: Report;
@@ -357,19 +358,10 @@ function count(installations: number): string {
 }
 
 function summaryLines(outcomes: CleanupOutcome[]): Body {
-  const removed = outcomes.filter((outcome) => outcome.result === "removed").length;
-  const lines: Line[] = [
-    { key: "title", text: `Cleanup finished: ${removed} removed, ${outcomes.length - removed} failed` },
-  ];
-  for (const outcome of outcomes) {
-    lines.push(
-      { key: `${outcome.name} gap`, text: "" },
-      { key: outcome.name, text: outcome.name, style: "bold" },
-      outcome.result === "removed"
-        ? { key: `${outcome.name} outcome`, text: `  Removed. Undo: ${undo(outcome.action)}` }
-        : { key: `${outcome.name} outcome`, text: `  Failed: ${outcome.message}`, style: "warning" },
-    );
-  }
+  const lines = formatCleanupSummary(outcomes)
+    .replace(/\n$/, "")
+    .split("\n")
+    .map((text, index): Line => ({ key: `summary ${index}`, text }));
   return { lines, focus: 0 };
 }
 

@@ -293,15 +293,27 @@ describe("TUI Cleanup", () => {
     await press(stdin, "y");
     await settle();
 
-    const frame = unwrapped(lastFrame()!);
-    expect(frame).toContain("Cleanup finished: 2 removed, 1 failed");
-    expect(frame).toContain("idle@market Failed: Plugin uninstall is not implemented yet");
-    expect(frame).toContain(
-      `find-skills Removed. Undo: ln -s '${join(config.home, ".agents", "skills", "find-skills")}' ` +
-        `'${join(config.path, "skills", "find-skills")}'`,
-    );
-    expect(frame).toContain("ux-writing Removed. Undo: restore it from the system trash");
-    expect(trash.moves).toEqual([join(config.path, "skills", "ux-writing")]);
+    const target = join(config.home, ".agents", "skills", "find-skills");
+    const link = join(config.path, "skills", "find-skills");
+    const folder = join(config.path, "skills", "ux-writing");
+    const summary = [
+      "Cleanup of 3 Installations: 3 removed, 0 failed",
+      "",
+      "removed  idle@market",
+      "removed  find-skills",
+      "removed  ux-writing",
+      "",
+      "To reinstall a removed Plugin:",
+      "  claude plugin install idle@market --scope user",
+      "",
+      "To restore a removed Linked Skill:",
+      `  ln -s '${target}' '${link}'`,
+      "",
+      "Moved to the system trash, where they can be restored:",
+      `  ${folder}`,
+    ];
+    expect(unwrapped(lastFrame()!)).toContain(unwrapped(summary.join("\n")));
+    expect(trash.moves).toEqual([folder]);
   });
 });
 

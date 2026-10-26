@@ -1,6 +1,6 @@
 import { mkdir, rename } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { ClaudeRunner, TrashMover } from "../../src/engine/index.js";
+import type { ClaudeRunner, ClaudeRunResult, TrashMover } from "../../src/engine/index.js";
 
 export interface FakeTrash {
   dir: string;
@@ -27,13 +27,14 @@ export interface FakeClaude {
   run: ClaudeRunner;
 }
 
-export function fakeClaude(): FakeClaude {
+export function fakeClaude(results: Record<string, ClaudeRunResult> = {}): FakeClaude {
   const calls: string[][] = [];
   return {
     calls,
     run: async (args) => {
       calls.push(args);
-      return { exitCode: 0, output: "" };
+      const pluginId = args[2]!;
+      return results[pluginId] ?? { exitCode: 0, output: `✔ Successfully uninstalled plugin: ${pluginId}\n` };
     },
   };
 }

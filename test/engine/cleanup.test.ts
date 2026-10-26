@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { cleanup, report, type Installation, type Report } from "../../src/engine/index.js";
+import { cleanup, report, type ClaudeRunner, type Installation, type Report } from "../../src/engine/index.js";
 import { fakeConfigDir, type FakeConfigDir } from "../support/fake-config-dir.js";
 import { fakeClaude, fakeTrash } from "../support/fake-effects.js";
 
@@ -153,26 +153,97 @@ describe("cleanup", () => {
       "keep-me",
     ]);
   });
+});
 
-  it("reports a Plugin uninstall as not implemented yet and leaves the Plugin installed", async () => {
-    const config = await fakeConfigDir();
-    await config.plugin("idle@market", { skills: ["nap"] });
+function withClaude(config: FakeConfigDir, runClaude: ClaudeRunner) {
+  return { configDir: config.path, trash: fakeTrash(join(config.home, ".Trash")).move, runClaude };
+}
+
+async function twoPlugins() {
+  const config = await fakeConfigDir();
+  await config.plugin("vercel@claude-plugins-official", { skills: ["deploy"] });
+  await config.plugin("idle@market", { skills: ["nap"] });
+  return { config, result: await report({ configDir: config.path, now }) };
+}
+
+describe("cleanup of Plugins", () => {
+  it("uninstalls each selected Plugin through claude plugin uninstall at user scope", async () => {
+    const { config, result } = await twoPlugins();
+    const { calls, run: claude } = fakeClaude();
+
+    const outcomes = await cleanup(
+      named(result, "vercel@claude-plugins-official", "idle@market"),
+      withClaude(config, claude),
+    );
+
+    expect(calls).toEqual([
+      ["plugin", "uninstall", "vercel@claude-plugins-official", "--scope", "user"],
+      ["plugin", "uninstall", "idle@market", "--scope", "user"],
+    ]);
+    expect(outcomes.map(({ name, result }) => ({ name, result }))).toEqual([
+      { name: "vercel@claude-plugins-official", result: "removed" },
+      { name: "idle@market", result: "removed" },
+    ]);
+  });
+
+  it("reports a failed uninstall with the command's output as-is and goes on with the rest", async () => {
+    const { config, result } = await twoPlugins();
+    const failure =
+      '✘ Failed to uninstall plugin "vercel@claude-plugins-official": settings_still_on\n  see `claude plugin disable`\n';
+    const { calls, run: claude } = fakeClaude({
+      "vercel@claude-plugins-official": { exitCode: 1, output: failure },
+    });
+
+    const outcomes = await cleanup(
+      named(result, "vercel@claude-plugins-official", "idle@market"),
+      withClaude(config, claude),
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(outcomes.map(({ name, result }) => ({ name, result }))).toEqual([
+      { name: "vercel@claude-plugins-official", result: "failed" },
+      { name: "idle@market", result: "removed" },
+    ]);
+    expect(outcomes[0]).toMatchObject({ message: failure });
+  });
+
+  it("reports a failure when claude cannot be run at all and goes on with the rest", async () => {
+    const { config, result } = await twoPlugins();
+    const calls: string[][] = [];
+    const claude: ClaudeRunner = async (args) => {
+      calls.push(args);
+      if (calls.length === 1) throw new Error("spawn claude ENOENT");
+      return { exitCode: 0, output: "" };
+    };
+
+    const outcomes = await cleanup(
+      named(result, "vercel@claude-plugins-official", "idle@market"),
+      withClaude(config, claude),
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(outcomes[0]).toMatchObject({ result: "failed", message: "spawn claude ENOENT" });
+    expect(outcomes[1]).toMatchObject({ result: "removed" });
+  });
+
+  it("never deletes a Plugin's files itself", async () => {
+    const { config, result } = await twoPlugins();
+    const { run: claude } = fakeClaude();
+
+    await cleanup(named(result, "idle@market"), withClaude(config, claude));
+
+    const installPath = join(config.path, "plugins", "cache", "market", "idle", "1.0.0");
+    await expect(readdir(installPath)).resolves.toContain(".claude-plugin");
+  });
+
+  it("calls claude only for Plugins in the selection", async () => {
+    const { config } = await twoPlugins();
     await config.standaloneSkill("ux-writing");
     const result = await report({ configDir: config.path, now });
-    const { claude, options } = effectsFor(config);
+    const { calls, run: claude } = fakeClaude();
 
-    const outcomes = await cleanup(named(result, "idle@market", "ux-writing"), options);
+    await cleanup(named(result, "ux-writing", "idle@market"), withClaude(config, claude));
 
-    expect(outcomes).toEqual([
-      expect.objectContaining({
-        name: "idle@market",
-        result: "failed",
-        message: "Plugin uninstall is not implemented yet",
-      }),
-      expect.objectContaining({ name: "ux-writing", result: "removed" }),
-    ]);
-    expect(claude.calls).toEqual([]);
-    const after = await report({ configDir: config.path, now });
-    expect(after.installations.map((installation) => installation.name)).toEqual(["idle@market"]);
+    expect(calls).toEqual([["plugin", "uninstall", "idle@market", "--scope", "user"]]);
   });
 });
