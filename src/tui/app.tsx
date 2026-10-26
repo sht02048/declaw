@@ -1,9 +1,10 @@
 import { Box, Text, useApp, useInput, useWindowSize } from "ink";
-import { useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import wrapAnsi from "wrap-ansi";
 import {
   isRemovable,
   planCleanup,
+  type CleanupOutcome,
   type Component,
   type Installation,
   type PlannedAction,
@@ -22,9 +23,10 @@ export interface AppProps {
   report: Report;
   configDir: string;
   dryRun: boolean;
+  cleanup: (selection: Installation[]) => Promise<CleanupOutcome[]>;
 }
 
-type Screen = "list" | "confirm";
+type Screen = "list" | "confirm" | "running" | "summary";
 
 interface Line {
   key: string;
@@ -34,14 +36,16 @@ interface Line {
 
 const LIST_KEYS =
   "up/down move · space select · r recommended · right/left expand · enter review · q quit";
-const CONFIRM_KEYS = "up/down scroll · esc back to the list · q quit";
+const DRY_RUN_KEYS = "up/down scroll · esc back to the list · q quit";
+const CONFIRM_KEYS = `y run the Cleanup · ${DRY_RUN_KEYS}`;
+const SUMMARY_KEYS = "up/down scroll · q quit";
 
-export function App({ report, configDir, dryRun }: AppProps) {
+export function App({ report, configDir, dryRun, cleanup }: AppProps) {
   const { installations } = report;
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
-  const [state, dispatch] = useReducer(reducerFor(installations), INITIAL_STATE);
-  const { screen, cursor, confirmTop, selection, expanded } = state;
+  const [state, dispatch] = useReducer(reducerFor(installations, dryRun), INITIAL_STATE);
+  const { screen, cursor, pageTop, selection, expanded } = state;
   const listTop = useRef(0);
 
   const selected = installations.filter((installation) => selection.has(installation.name));
@@ -53,25 +57,13 @@ export function App({ report, configDir, dryRun }: AppProps) {
     ),
   ];
 
-  const body =
-    screen === "list"
-      ? listLines(installations, cursor, selection, expanded)
-      : confirmLines(planCleanup(selected, { configDir }), dryRun);
-  const footer: Line[] =
-    screen === "list"
-      ? [
-          { key: "gap", text: "" },
-          { key: "legend", text: "* recommended for Cleanup", style: "dim" },
-          ...(state.needsSelection
-            ? [{ key: "hint", text: "Select at least one Installation to review.", style: "warning" as const }]
-            : []),
-          { key: "keys", text: LIST_KEYS, style: "dim" },
-        ]
-      : [
-          { key: "gap", text: "" },
-          ...(dryRun ? [{ key: "dry-run", text: "Dry run: nothing will be changed." }] : []),
-          { key: "keys", text: CONFIRM_KEYS, style: "dim" },
-        ];
+  useEffect(() => {
+    if (screen !== "running") return;
+    void cleanup(selected).then((outcomes) => dispatch({ type: "finished", outcomes }));
+  }, [screen]);
+
+  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir }), dryRun);
+  const footer = footerOf(state, dryRun);
 
   const heightOf = (line: Line) =>
     wrapAnsi(line.text, Math.max(1, columns), { trim: false, hard: true }).split("\n").length;
@@ -83,22 +75,24 @@ export function App({ report, configDir, dryRun }: AppProps) {
     top = followFocus(heights, body.focus, body.focusEnd ?? body.focus, room, listTop.current);
     listTop.current = top;
   } else {
-    top = Math.min(confirmTop, lastTop(heights, room));
+    top = Math.min(pageTop, lastTop(heights, room));
   }
   const view = windowFrom(heights, top, room);
 
   useInput((input, key) => {
     if (key.escape) dispatch({ type: "back" });
-    else if (key.upArrow) dispatch({ type: "up", lastConfirmTop: lastTop(heights, room) });
-    else if (key.downArrow) dispatch({ type: "down", lastConfirmTop: lastTop(heights, room) });
+    else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
+    else if (key.downArrow) dispatch({ type: "down", lastPageTop: lastTop(heights, room) });
     else if (key.rightArrow) dispatch({ type: "expand", open: true });
     else if (key.leftArrow) dispatch({ type: "expand", open: false });
     else if (key.return) dispatch({ type: "review" });
     // Keys typed faster than a render arrive as one chunk, such as "r\r".
     else if (!key.ctrl && !key.meta) {
       for (const character of input) {
-        if (character === "q") exit();
-        else if (character === " ") dispatch({ type: "toggle" });
+        if (character === "q") {
+          if (screen !== "running") exit();
+        } else if (character === " ") dispatch({ type: "toggle" });
+        else if (character === "y") dispatch({ type: "proceed" });
         else if (character === "r") dispatch({ type: "select-recommended" });
         else if (character === "\r") dispatch({ type: "review" });
       }
@@ -131,43 +125,51 @@ export function App({ report, configDir, dryRun }: AppProps) {
 interface State {
   screen: Screen;
   cursor: number;
-  confirmTop: number;
+  pageTop: number;
+  outcomes: CleanupOutcome[];
   needsSelection: boolean;
   selection: ReadonlySet<string>;
   expanded: ReadonlySet<string>;
 }
 
 type Action =
-  | { type: "up"; lastConfirmTop: number }
-  | { type: "down"; lastConfirmTop: number }
+  | { type: "up"; lastPageTop: number }
+  | { type: "down"; lastPageTop: number }
   | { type: "expand"; open: boolean }
   | { type: "toggle" }
   | { type: "select-recommended" }
   | { type: "review" }
+  | { type: "proceed" }
+  | { type: "finished"; outcomes: CleanupOutcome[] }
   | { type: "back" };
 
 const INITIAL_STATE: State = {
   screen: "list",
   cursor: 0,
-  confirmTop: 0,
+  pageTop: 0,
+  outcomes: [],
   needsSelection: false,
   selection: new Set(),
   expanded: new Set(),
 };
 
-function reducerFor(installations: Installation[]) {
+function reducerFor(installations: Installation[], dryRun: boolean) {
   return (state: State, action: Action): State => {
-    if (state.screen === "confirm") {
+    if (state.screen === "running") {
+      return action.type === "finished"
+        ? { ...state, screen: "summary", pageTop: 0, outcomes: action.outcomes }
+        : state;
+    }
+    if (state.screen === "confirm" || state.screen === "summary") {
       switch (action.type) {
         case "back":
-          return { ...state, screen: "list" };
+          return state.screen === "confirm" ? { ...state, screen: "list" } : state;
+        case "proceed":
+          return state.screen === "confirm" && !dryRun ? { ...state, screen: "running" } : state;
         case "up":
-          return {
-            ...state,
-            confirmTop: Math.max(0, Math.min(state.confirmTop, action.lastConfirmTop) - 1),
-          };
+          return { ...state, pageTop: Math.max(0, Math.min(state.pageTop, action.lastPageTop) - 1) };
         case "down":
-          return { ...state, confirmTop: Math.min(action.lastConfirmTop, state.confirmTop + 1) };
+          return { ...state, pageTop: Math.min(action.lastPageTop, state.pageTop + 1) };
         default:
           return state;
       }
@@ -206,7 +208,9 @@ function reducerFor(installations: Installation[]) {
       case "review":
         return state.selection.size === 0
           ? { ...state, needsSelection: true }
-          : { ...state, screen: "confirm", confirmTop: 0 };
+          : { ...state, screen: "confirm", pageTop: 0 };
+      case "proceed":
+      case "finished":
       case "back":
         return state;
     }
@@ -303,10 +307,76 @@ function installationCells(installation: Installation): string[] {
   ];
 }
 
+function bodyOf(
+  state: State,
+  installations: Installation[],
+  plan: () => PlannedAction[],
+  dryRun: boolean,
+): Body {
+  switch (state.screen) {
+    case "list":
+      return listLines(installations, state.cursor, state.selection, state.expanded);
+    case "confirm":
+      return confirmLines(plan(), dryRun);
+    case "running":
+      return { lines: [{ key: "running", text: `Cleaning up ${count(state.selection.size)}...` }], focus: 0 };
+    case "summary":
+      return summaryLines(state.outcomes);
+  }
+}
+
+function footerOf(state: State, dryRun: boolean): Line[] {
+  const gap: Line = { key: "gap", text: "" };
+  switch (state.screen) {
+    case "list":
+      return [
+        gap,
+        { key: "legend", text: "* recommended for Cleanup", style: "dim" },
+        ...(state.needsSelection
+          ? [{ key: "hint", text: "Select at least one Installation to review.", style: "warning" as const }]
+          : []),
+        { key: "keys", text: LIST_KEYS, style: "dim" },
+      ];
+    case "confirm":
+      return dryRun
+        ? [
+            gap,
+            { key: "dry-run", text: "Dry run: nothing will be changed." },
+            { key: "keys", text: DRY_RUN_KEYS, style: "dim" },
+          ]
+        : [gap, { key: "keys", text: CONFIRM_KEYS, style: "dim" }];
+    case "running":
+      return [];
+    case "summary":
+      return [gap, { key: "keys", text: SUMMARY_KEYS, style: "dim" }];
+  }
+}
+
+function count(installations: number): string {
+  return `${installations} ${installations === 1 ? "Installation" : "Installations"}`;
+}
+
+function summaryLines(outcomes: CleanupOutcome[]): Body {
+  const removed = outcomes.filter((outcome) => outcome.result === "removed").length;
+  const lines: Line[] = [
+    { key: "title", text: `Cleanup finished: ${removed} removed, ${outcomes.length - removed} failed` },
+  ];
+  for (const outcome of outcomes) {
+    lines.push(
+      { key: `${outcome.name} gap`, text: "" },
+      { key: outcome.name, text: outcome.name, style: "bold" },
+      outcome.result === "removed"
+        ? { key: `${outcome.name} outcome`, text: `  Removed. Undo: ${undo(outcome.action)}` }
+        : { key: `${outcome.name} outcome`, text: `  Failed: ${outcome.message}`, style: "warning" },
+    );
+  }
+  return { lines, focus: 0 };
+}
+
 function confirmLines(plan: PlannedAction[], dryRun: boolean): Body {
   const title = dryRun ? "Dry run of the Cleanup of" : "Review the Cleanup of";
   const lines: Line[] = [
-    { key: "title", text: `${title} ${plan.length} ${plan.length === 1 ? "Installation" : "Installations"}:` },
+    { key: "title", text: `${title} ${count(plan.length)}:` },
   ];
   for (const action of plan) {
     lines.push(

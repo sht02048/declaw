@@ -1,9 +1,10 @@
 import { join } from "node:path";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import { report } from "../../src/engine/index.js";
+import { cleanup, report, type CleanupOutcome, type Installation } from "../../src/engine/index.js";
 import { App } from "../../src/tui/app.js";
 import { fakeConfigDir, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
+import { fakeClaude, fakeTrash } from "../support/fake-effects.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
 
@@ -24,7 +25,7 @@ describe("TUI", () => {
   it("renders the list of Installations under the covered period", async () => {
     const { config, result } = await exampleReport();
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const frame = lastFrame()!;
     expect(frame.split("\n")[0]).toBe("Usage Stats from 2026-09-28 to 2026-10-26");
@@ -38,14 +39,14 @@ describe("TUI", () => {
     await config.corruptInstallRecords();
     const result = await report({ configDir: config.path, now });
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     expect(lastFrame()).toMatch(/Install records: unreadable \(.+\)/);
   });
 
   it("selects the recommended set in one step", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r");
 
@@ -54,7 +55,7 @@ describe("TUI", () => {
 
   it("toggles the Installation under the cursor", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, DOWN, " ", DOWN, " ");
 
@@ -63,7 +64,7 @@ describe("TUI", () => {
 
   it("shows a Synced Skill but never selects it", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, " ");
 
@@ -75,7 +76,7 @@ describe("TUI", () => {
 
   it("expands a Plugin to show Uses per Component, and collapses it again", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, DOWN, DOWN, RIGHT);
 
@@ -100,7 +101,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ configDir: config.path, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -123,7 +124,7 @@ describe("TUI in a short terminal", () => {
       skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
     ]);
     const result = await report({ configDir: config.path, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -147,7 +148,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ configDir: config.path, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -166,7 +167,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ configDir: config.path, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     let rows = 16;
     Object.defineProperty(stdout, "rows", { get: () => rows });
     stdout.emit("resize");
@@ -189,7 +190,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ configDir: config.path, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -218,7 +219,7 @@ async function cleanupReport() {
 describe("TUI confirmation screen", () => {
   it("lists each selected Installation with its planned action and how to undo it", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", ENTER);
 
@@ -241,7 +242,7 @@ describe("TUI confirmation screen", () => {
 
   it("reviews a selection made in the same burst of keys", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, `r${ENTER}`);
 
@@ -250,7 +251,7 @@ describe("TUI confirmation screen", () => {
 
   it("asks for a selection when reviewing with nothing selected", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, ENTER);
 
@@ -260,7 +261,7 @@ describe("TUI confirmation screen", () => {
 
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, " ", ENTER, ESCAPE);
 
@@ -269,14 +270,48 @@ describe("TUI confirmation screen", () => {
 
   it("offers no way past the confirmation screen in a dry run", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", ENTER, ENTER, "y");
 
     expect(lastFrame()).toContain("Dry run: nothing will be changed");
     expect(lastFrame()).toContain("Undo: restore it from the system trash");
+    expect(lastFrame()).not.toContain("y run the Cleanup");
   });
 });
+
+describe("TUI Cleanup", () => {
+  it("runs the Cleanup on y and lists each Installation with its outcome", async () => {
+    const { config, result } = await cleanupReport();
+    const trash = fakeTrash(join(config.home, ".Trash"));
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} dryRun={false} cleanup={run} />);
+
+    await press(stdin, "r", ENTER);
+    expect(lastFrame()).toContain("y run the Cleanup");
+    await press(stdin, "y");
+    await settle();
+
+    const frame = unwrapped(lastFrame()!);
+    expect(frame).toContain("Cleanup finished: 2 removed, 1 failed");
+    expect(frame).toContain("idle@market Failed: Plugin uninstall is not implemented yet");
+    expect(frame).toContain(
+      `find-skills Removed. Undo: ln -s '${join(config.home, ".agents", "skills", "find-skills")}' ` +
+        `'${join(config.path, "skills", "find-skills")}'`,
+    );
+    expect(frame).toContain("ux-writing Removed. Undo: restore it from the system trash");
+    expect(trash.moves).toEqual([join(config.path, "skills", "ux-writing")]);
+  });
+});
+
+const unexpectedCleanup = async (): Promise<CleanupOutcome[]> => {
+  throw new Error("cleanup must not run");
+};
+
+async function settle() {
+  for (let tick = 0; tick < 5; tick++) await new Promise((resolve) => setTimeout(resolve, 10));
+}
 
 const ENTER = "\r";
 const ESCAPE = "\u001B";

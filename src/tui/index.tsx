@@ -1,5 +1,7 @@
 import { render } from "ink";
 import type { InteractiveSession } from "../cli/main.js";
+import { cleanup } from "../engine/index.js";
+import { runClaude, systemTrash } from "../system-effects.js";
 import { App } from "./app.js";
 
 export async function runInteractive({ report, configDir, dryRun }: InteractiveSession): Promise<number> {
@@ -9,7 +11,14 @@ export async function runInteractive({ report, configDir, dryRun }: InteractiveS
     );
     return 1;
   }
-  const instance = render(<App report={report} configDir={configDir} dryRun={dryRun} />);
+  const instance = render(
+    <App
+      report={report}
+      configDir={configDir}
+      dryRun={dryRun}
+      cleanup={(selection) => cleanup(selection, { configDir, trash: systemTrash, runClaude })}
+    />,
+  );
   await instance.waitUntilExit();
   return 0;
 }
