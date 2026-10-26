@@ -246,17 +246,38 @@ export function slashCommand(
   return userPrompt(tags.join("\n"), timestamp);
 }
 
-export function hookRun(hookEvent: string, timestamp: string): TranscriptLine {
+export function hookRun(
+  hookEvent: string,
+  timestamp: string,
+  {
+    type = "hook_success",
+    command = "node ./hook.cjs",
+    content,
+  }: { type?: string; command?: string; content?: string } = {},
+): TranscriptLine {
   return {
     type: "attachment",
     timestamp,
     attachment: {
-      type: "hook_success",
+      type,
       hookName: `${hookEvent}:startup`,
       hookEvent,
-      command: "node ./hook.cjs",
+      command,
       exitCode: 0,
+      ...(content === undefined ? {} : { content }),
     },
+  };
+}
+
+export function stopHookSummary(timestamp: string, command: string): TranscriptLine {
+  return {
+    type: "system",
+    subtype: "stop_hook_summary",
+    timestamp,
+    hookCount: 1,
+    hookInfos: [{ command }],
+    hookErrors: [],
+    preventedContinuation: false,
   };
 }
 

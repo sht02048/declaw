@@ -3,9 +3,11 @@ import { report, type Plugin, type Report } from "../../src/engine/index.js";
 import {
   agentToolCall,
   fakeConfigDir,
+  hookRun,
   mcpToolCall,
   skillToolCall,
   slashCommand,
+  stopHookSummary,
 } from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
@@ -198,6 +200,54 @@ describe("report: Uses inside subagents", () => {
     expect(result.installations.map(({ name, uses, lastUse }) => ({ name, uses, lastUse }))).toEqual([
       { name: "oh-my-claudecode@omc", uses: 3, lastUse: new Date("2026-10-05T09:03:00.000Z") },
       { name: "linear-ticket", uses: 1, lastUse: new Date("2026-10-05T09:01:00.000Z") },
+    ]);
+  });
+});
+
+describe("report: hook runs", () => {
+  it("shows zero Uses for a Plugin whose only transcript activity is hook runs", async () => {
+    const config = await fakeConfigDir();
+    const hookCommand = 'node "${CLAUDE_PLUGIN_ROOT}"/scripts/keywords.cjs';
+    await config.plugin("oh-my-claudecode@omc", {
+      skills: ["plan"],
+      commands: ["cancel"],
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: hookCommand }] }],
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: hookCommand }] }],
+        Stop: [{ hooks: [{ type: "command", command: hookCommand }] }],
+      },
+    });
+    const session = { project: "/work/app", session: "s1" };
+    const hookActivity = [
+      hookRun("SessionStart", "2026-10-05T09:00:00.000Z", { command: hookCommand }),
+      hookRun("UserPromptSubmit", "2026-10-05T09:00:01.000Z", {
+        type: "hook_additional_context",
+        command: hookCommand,
+        content:
+          "[MAGIC KEYWORD: plan] Invoke oh-my-claudecode:plan\n<command-name>/oh-my-claudecode:cancel</command-name>",
+      }),
+      hookRun("PostToolUse", "2026-10-05T09:00:02.000Z", {
+        type: "async_hook_response",
+        command: hookCommand,
+      }),
+      stopHookSummary("2026-10-05T09:00:03.000Z", hookCommand),
+    ];
+    await config.transcript(session, hookActivity);
+    await config.subagentTranscript({ ...session, agentId: "a1" }, hookActivity);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.installations).toMatchObject([
+      {
+        name: "oh-my-claudecode@omc",
+        hooks: 3,
+        uses: 0,
+        lastUse: null,
+        components: [
+          { name: "oh-my-claudecode:plan", uses: 0 },
+          { name: "oh-my-claudecode:cancel", uses: 0 },
+        ],
+      },
     ]);
   });
 });
