@@ -87,7 +87,7 @@ export async function report({ configDir, now }: ReportOptions): Promise<Report>
   };
 }
 
-const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill"]);
+const SKILL_TOOL_KINDS = new Set<ComponentKind>(["skill", "command"]);
 
 function pluginInstallation(plugin: PluginEntry, usage: Map<string, UsageTally>): Plugin {
   const components = plugin.components.map(

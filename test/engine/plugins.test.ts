@@ -227,4 +227,19 @@ describe("report: plugin skill Uses", () => {
       },
     ]);
   });
+
+  it("counts a Skill tool call that names a plugin command as a Use of that command", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("vercel@claude-plugins-official", { commands: ["deploy"] });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("vercel:deploy", "2026-10-04T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(plugins(result)[0]).toMatchObject({
+      uses: 1,
+      components: [{ kind: "command", name: "vercel:deploy", uses: 1 }],
+    });
+  });
 });
