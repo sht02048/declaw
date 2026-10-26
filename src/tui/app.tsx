@@ -9,7 +9,6 @@ import {
   type PlannedAction,
   type Report,
 } from "../engine/index.js";
-import { actionText } from "../cli/actions.js";
 import { formatSources } from "../cli/format.js";
 import { formatCleanupSummary } from "../cli/summary.js";
 import { countOf } from "../plural.js";
@@ -25,6 +24,7 @@ import {
   isChild,
   listRowsOf,
 } from "./list.js";
+import { confirmHeading, confirmLines } from "./confirm.js";
 import { DetailPanel, detailLines } from "./detail.js";
 import { formatPeriodLine } from "./text.js";
 
@@ -43,10 +43,11 @@ interface Line {
   element?: ReactNode;
   content?: ReactNode;
   text?: string;
+  wrap?: "truncate-end" | "truncate-middle";
   style?: "bold" | "dim" | "warning";
 }
 
-type Keys = [key: string, label: string][];
+type Keys = [key: string, label: string, color?: string][];
 
 const LIST_KEYS: Keys = [
   ["↑↓", "move"],
@@ -56,8 +57,12 @@ const LIST_KEYS: Keys = [
   ["enter", "review"],
   ["q", "quit"],
 ];
-const DRY_RUN_KEYS = "up/down scroll · esc back to the list · q quit";
-const CONFIRM_KEYS = `y run the Cleanup · ${DRY_RUN_KEYS}`;
+const CONFIRM_KEYS: Keys = [
+  ["y", "remove", "red"],
+  ["esc", "back"],
+  ["q", "quit"],
+  ["↑↓", "scroll"],
+];
 const SUMMARY_KEYS = "up/down scroll · q quit";
 
 export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
@@ -172,7 +177,7 @@ function renderLine(line: Line): ReactNode {
   return (
     <Text
       key={line.key}
-      wrap="truncate-end"
+      wrap={line.wrap ?? "truncate-end"}
       bold={line.style === "bold"}
       dimColor={line.style === "dim"}
       {...(line.style === "warning" && { color: "yellow" })}
@@ -183,10 +188,12 @@ function renderLine(line: Line): ReactNode {
 }
 
 function keyBar(keys: Keys): ReactNode {
-  return keys.map(([key, label], index) => (
+  return keys.map(([key, label, color], index) => (
     <Text key={key}>
       {index > 0 && "  "}
-      <Text bold>{key}</Text>
+      <Text bold {...(color && { color })}>
+        {key}
+      </Text>
       <Text dimColor>{` ${label}`}</Text>
     </Text>
   ));
@@ -387,8 +394,18 @@ function bodyOf(state: State, installations: Installation[], plan: () => Planned
   switch (state.screen) {
     case "list":
       return listLines(installations, state, layout);
-    case "confirm":
-      return confirmLines(plan(), layout.dryRun);
+    case "confirm": {
+      const planned = plan();
+      return {
+        header: [
+          { key: "heading gap", content: "" },
+          { key: "heading", content: confirmHeading(planned.length, layout.dryRun) },
+          { key: "lines gap", content: "" },
+        ],
+        lines: confirmLines(planned),
+        focus: 0,
+      };
+    }
     case "running":
       return {
         header: [],
@@ -411,13 +428,10 @@ function footerOf(state: State, dryRun: boolean): Line[] {
         { key: "keys", content: keyBar(LIST_KEYS) },
       ];
     case "confirm":
-      return dryRun
-        ? [
-            gap,
-            { key: "dry-run", text: "Dry run: nothing will be changed." },
-            { key: "keys", text: DRY_RUN_KEYS, style: "dim" },
-          ]
-        : [gap, { key: "keys", text: CONFIRM_KEYS, style: "dim" }];
+      return [
+        { key: "keys gap", content: "" },
+        { key: "keys", content: keyBar(dryRun ? CONFIRM_KEYS.slice(1) : CONFIRM_KEYS) },
+      ];
     case "running":
       return [];
     case "summary":
@@ -430,21 +444,6 @@ function summaryLines(outcomes: CleanupOutcome[]): Body {
     .replace(/\n$/, "")
     .split("\n")
     .map((text, index): Line => ({ key: `summary ${index}`, text }));
-  return { header: [], lines, focus: 0 };
-}
-
-function confirmLines(plan: PlannedAction[], dryRun: boolean): Body {
-  const title = dryRun ? "Dry run of the Cleanup of" : "Review the Cleanup of";
-  const lines: Line[] = [{ key: "title", text: `${title} ${countOf(plan.length, "Installation")}:` }];
-  for (const action of plan) {
-    const { describe, undo } = actionText(action);
-    lines.push(
-      { key: `${action.name} gap`, text: "" },
-      { key: action.name, text: action.name, style: "bold" },
-      { key: `${action.name} action`, text: `  ${describe}` },
-      { key: `${action.name} undo`, text: `  Undo: ${undo}`, style: "dim" },
-    );
-  }
   return { header: [], lines, focus: 0 };
 }
 

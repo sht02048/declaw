@@ -164,7 +164,7 @@ describe("TUI in a short terminal", () => {
     expect(lastFrame()).toContain("big:f");
   });
 
-  it("fits a confirmation screen whose long paths wrap at word boundaries", async () => {
+  it("fits a confirmation screen with long paths, one terminal row per line", async () => {
     const config = await fakeConfigDir();
     for (let index = 0; index < 6; index++) {
       const folder = `${index}`.padEnd(Math.max(1, 90 - config.home.length - 1), "x");
@@ -181,7 +181,9 @@ describe("TUI in a short terminal", () => {
     await press(stdin, "r", ENTER);
 
     for (let step = 0; step < 30; step++) {
-      expect(lastFrame()!.split("\n").length).toBeLessThanOrEqual(16);
+      const lines = plain(lastFrame()!).split("\n");
+      expect(lines.length).toBeLessThanOrEqual(16);
+      expect(lines.every((line) => line.length <= 100)).toBe(true);
       await press(stdin, DOWN);
     }
   });
@@ -198,7 +200,7 @@ describe("TUI in a short terminal", () => {
     Object.defineProperty(stdout, "rows", { get: () => rows });
     stdout.emit("resize");
     await press(stdin, "r", ENTER, ...Array.from({ length: 60 }, () => DOWN));
-    rows = 30;
+    rows = 26;
     stdout.emit("resize");
     await new Promise((resolve) => setTimeout(resolve, 0));
     const beforeUp = lastFrame();
@@ -243,27 +245,30 @@ async function cleanupReport() {
 }
 
 describe("TUI confirmation screen", () => {
-  it("lists each selected Installation with its planned action and how to undo it", async () => {
+  it("groups the selected Installations by planned action under a heading, then lists how to undo each", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
 
     const target = join(config.home, ".agents", "skills", "find-skills");
-    const frame = unwrapped(lastFrame()!);
-    expect(frame).toContain(
-      "idle@market Uninstall with claude plugin uninstall idle@market --scope user " +
-        "Undo: claude plugin install idle@market --scope user",
+    const lines = lastFrame()!.split("\n").map((line) => line.trim());
+    const after = (heading: string) => lines[lines.indexOf(heading) + 1];
+    expect(lines).toContain("Remove 3 Installations?");
+    expect(after("Uninstall Plugins (1)")).toBe(
+      "idle@market  Uninstall with claude plugin uninstall idle@market --scope user",
     );
-    expect(frame).toContain(
-      `find-skills Remove the link only, keeping ${target} ` +
-        `Undo: ln -s '${target}' '${join(config.path, "skills", "find-skills")}'`,
+    expect(after("Remove links (1)")).toBe(`find-skills  Remove the link only, keeping ${target}`);
+    expect(after("Move to trash (1)")).toBe(
+      `ux-writing  Move ${join(config.path, "skills", "ux-writing")} to the system trash`,
     );
-    expect(frame).toContain(
-      `ux-writing Move ${join(config.path, "skills", "ux-writing")} to the system trash ` +
-        "Undo: restore it from the system trash",
-    );
-    expect(frame).not.toContain("[x]");
+    expect(lines.slice(lines.indexOf("Undo") + 1, lines.indexOf("Undo") + 4)).toEqual([
+      "claude plugin install idle@market --scope user",
+      `ln -s '${target}' '${join(config.path, "skills", "find-skills")}'`,
+      "ux-writing: restore it from the system trash",
+    ]);
+    expect(lastFrame()).not.toContain("◉");
   });
 
   it("reviews a selection made in the same burst of keys", async () => {
@@ -272,7 +277,7 @@ describe("TUI confirmation screen", () => {
 
     await press(stdin, `r${ENTER}`);
 
-    expect(lastFrame()).toContain("Review the Cleanup of 3 Installations");
+    expect(lastFrame()).toContain("Remove 3 Installations?");
   });
 
   it("asks for a selection when reviewing with nothing selected", async () => {
@@ -301,8 +306,9 @@ describe("TUI confirmation screen", () => {
     await press(stdin, "r", ENTER, ENTER, "y");
 
     expect(lastFrame()).toContain("Dry run: nothing will be changed");
-    expect(lastFrame()).toContain("Undo: restore it from the system trash");
-    expect(lastFrame()).not.toContain("y run the Cleanup");
+    expect(lastFrame()).not.toContain("Remove 3 Installations?");
+    expect(lastFrame()).toContain("ux-writing: restore it from the system trash");
+    expect(lastFrame()).not.toContain("y remove");
   });
 });
 
@@ -315,7 +321,7 @@ describe("TUI Cleanup", () => {
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
 
     await press(stdin, "r", ENTER);
-    expect(lastFrame()).toContain("y run the Cleanup");
+    expect(lastFrame()).toContain("y remove");
     await press(stdin, "y");
     await settle();
 
