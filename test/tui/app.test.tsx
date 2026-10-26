@@ -159,6 +159,28 @@ describe("TUI in a short terminal", () => {
     }
   });
 
+  it("scrolls up at once after the terminal grows on the confirmation screen", async () => {
+    const config = await fakeConfigDir();
+    for (let index = 0; index < 10; index++) await config.standaloneSkill(`skill-${index}`);
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ configDir: config.path, now });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} dryRun />);
+    let rows = 16;
+    Object.defineProperty(stdout, "rows", { get: () => rows });
+    stdout.emit("resize");
+    await press(stdin, "r", ENTER, ...Array.from({ length: 60 }, () => DOWN));
+    rows = 30;
+    stdout.emit("resize");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeUp = lastFrame();
+
+    await press(stdin, UP);
+
+    expect(lastFrame()).not.toBe(beforeUp);
+  });
+
   it("scrolls a long confirmation screen under the covered period", async () => {
     const config = await fakeConfigDir();
     const names = Array.from({ length: 10 }, (_, index) => `skill-${String(index).padStart(2, "0")}`);
@@ -248,6 +270,7 @@ describe("TUI confirmation screen", () => {
 
 const ENTER = "\r";
 const ESCAPE = "\u001B";
+const UP = "\u001B[A";
 const DOWN = "\u001B[B";
 const RIGHT = "\u001B[C";
 const LEFT = "\u001B[D";

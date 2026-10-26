@@ -86,7 +86,7 @@ export function App({ report, configDir, dryRun }: AppProps) {
 
   useInput((input, key) => {
     if (key.escape) dispatch({ type: "back" });
-    else if (key.upArrow) dispatch({ type: "up" });
+    else if (key.upArrow) dispatch({ type: "up", lastConfirmTop: lastTop(heights, room) });
     else if (key.downArrow) dispatch({ type: "down", lastConfirmTop: lastTop(heights, room) });
     else if (key.rightArrow) dispatch({ type: "expand", open: true });
     else if (key.leftArrow) dispatch({ type: "expand", open: false });
@@ -134,7 +134,7 @@ interface State {
 }
 
 type Action =
-  | { type: "up" }
+  | { type: "up"; lastConfirmTop: number }
   | { type: "down"; lastConfirmTop: number }
   | { type: "expand"; open: boolean }
   | { type: "toggle" }
@@ -157,7 +157,10 @@ function reducerFor(installations: Installation[]) {
         case "back":
           return { ...state, screen: "list" };
         case "up":
-          return { ...state, confirmTop: Math.max(0, state.confirmTop - 1) };
+          return {
+            ...state,
+            confirmTop: Math.max(0, Math.min(state.confirmTop, action.lastConfirmTop) - 1),
+          };
         case "down":
           return { ...state, confirmTop: Math.min(action.lastConfirmTop, state.confirmTop + 1) };
         default:
