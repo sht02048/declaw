@@ -49,6 +49,22 @@ describe("cleanup", () => {
     expect(claude.calls).toEqual([]);
   });
 
+  it("removes only the link of a broken Linked Skill", async () => {
+    const config = await fakeConfigDir();
+    await config.brokenLinkedSkill("gone-skill");
+    const result = await report({ ...config.paths, now });
+    const { trash, claude, options } = effectsFor(config);
+
+    const outcomes = await cleanup(named(result, "gone-skill"), options);
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({ name: "gone-skill", result: "removed", action: expect.objectContaining({ kind: "remove-link" }) }),
+    ]);
+    expect(await exists(join(config.path, "skills", "gone-skill"))).toBe(false);
+    expect(trash.moves).toEqual([]);
+    expect(claude.calls).toEqual([]);
+  });
+
   it("moves a real Standalone Skill's folder through the trash mover instead of deleting it", async () => {
     const config = await fakeConfigDir();
     await config.standaloneSkill("ux-writing");

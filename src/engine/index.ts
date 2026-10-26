@@ -39,7 +39,7 @@ export interface StandaloneSkill {
   recommended: boolean;
   uses: number | Unknown;
   lastUse: Date | null | Unknown;
-  linked?: { target: string };
+  linked?: { target: string; broken?: true };
   synced?: true;
 }
 

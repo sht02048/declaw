@@ -27,7 +27,9 @@ export function note(installation: Installation): string {
     if (installation.enabled === "unknown") return "may be disabled";
     return installation.enabled ? "" : "disabled";
   }
-  if (installation.linked) return `links to ${installation.linked.target}`;
+  if (installation.linked) {
+    return `${installation.linked.broken ? "broken link" : "links"} to ${installation.linked.target}`;
+  }
   if (installation.synced) return "managed by claude.ai";
   return "";
 }

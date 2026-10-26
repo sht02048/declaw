@@ -1,4 +1,3 @@
-import type { Dirent } from "node:fs";
 import { lstat, readlink, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { isSkillFolder, listDir } from "./fs.js";
@@ -10,7 +9,7 @@ export interface StandaloneSkillEntry {
   name: string;
   path: string;
   createdAt: Date;
-  linked?: { target: string };
+  linked?: { target: string; broken?: true };
   synced?: true;
 }
 
@@ -23,9 +22,12 @@ export async function findStandaloneSkills(configDir: string): Promise<Standalon
     if (entry.isDirectory()) {
       if (!(await isSkillFolder(path))) continue;
       skills.push({ name: entry.name, path, createdAt: await createdAt(path) });
-    } else if (await isLinkToFolder(entry, path)) {
+    } else if (entry.isSymbolicLink()) {
+      const linkTo = await linkTargetOf(path);
+      if (linkTo === "not a skill") continue;
       const target = resolve(skillsDir, await readlink(path));
-      skills.push({ name: entry.name, path, createdAt: await createdAt(path), linked: { target } });
+      const linked = linkTo === "missing" ? { target, broken: true as const } : { target };
+      skills.push({ name: entry.name, path, createdAt: await createdAt(path), linked });
     }
   }
   skills.push(...(await findSyncedSkills(join(skillsDir, SYNCED_SKILLS_DIR))));
@@ -58,11 +60,11 @@ async function createdAt(path: string): Promise<Date> {
   return new Date(birthtimeMs > 0 ? birthtimeMs : mtimeMs);
 }
 
-async function isLinkToFolder(entry: Dirent, path: string): Promise<boolean> {
-  if (!entry.isSymbolicLink()) return false;
+async function linkTargetOf(link: string): Promise<"skill" | "missing" | "not a skill"> {
   try {
-    return (await stat(path)).isDirectory() && (await isSkillFolder(path));
-  } catch {
-    return false;
+    return (await stat(link)).isDirectory() && (await isSkillFolder(link)) ? "skill" : "not a skill";
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP" ? "missing" : "not a skill";
   }
 }

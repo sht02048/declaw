@@ -133,6 +133,18 @@ describe("declaw stats", () => {
     expect(stdout).toContain("* recommended for Cleanup");
   });
 
+  it("flags a Linked Skill whose target no longer exists as broken", async () => {
+    const config = await exampleConfig();
+    const target = join(config.home, "gone", "old-skill");
+    await config.brokenLinkedSkill("old-skill", { target });
+
+    const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
+
+    expect(stdout.split("\n").find((line) => line.includes("old-skill"))).toMatch(
+      new RegExp(`Linked Skill\\s+old-skill\\s+0\\s+never\\s+broken link to ${target}$`),
+    );
+  });
+
   it("carries each Installation's status and recommended flag in --json", async () => {
     const config = await exampleConfig();
     await config.standaloneSkill("fresh-skill", { createdAt: "2026-10-20T00:00:00.000Z" });

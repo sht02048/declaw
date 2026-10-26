@@ -194,6 +194,19 @@ export class FakeConfigDir {
     return this;
   }
 
+  async brokenLinkedSkill(
+    name: string,
+    { target = join(this.home, ".agents", "skills", name), createdAt = DEFAULT_CREATED_AT } = {},
+  ): Promise<this> {
+    const skillsDir = join(this.path, "skills");
+    await mkdir(skillsDir, { recursive: true });
+    const link = join(skillsDir, name);
+    await symlink(target, link);
+    await lutimes(link, new Date(createdAt), new Date(createdAt));
+    setBirthTime(link, new Date(createdAt));
+    return this;
+  }
+
   async syncedSkill(
     name: string,
     account = "org_account",

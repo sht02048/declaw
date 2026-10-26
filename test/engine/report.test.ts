@@ -208,6 +208,41 @@ describe("report: Linked Skills and Synced Skills", () => {
     expect(result.installations.map((installation) => installation.name)).toEqual(["review"]);
   });
 
+  it("lists a link whose target no longer exists as a broken Linked Skill", async () => {
+    const config = await fakeConfigDir();
+    const target = join(config.home, ".agents", "skills", "gone-skill");
+    await config.brokenLinkedSkill("gone-skill", { target });
+    await config.brokenLinkedSkill("used-gone-skill");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("used-gone-skill", "2026-10-04T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "gone-skill",
+        installedAt,
+        status: "unused",
+        recommended: true,
+        uses: 0,
+        lastUse: null,
+        linked: { target, broken: true },
+      },
+      {
+        kind: "standalone-skill",
+        name: "used-gone-skill",
+        installedAt,
+        status: "used",
+        recommended: false,
+        uses: 1,
+        lastUse: new Date("2026-10-04T09:00:00.000Z"),
+        linked: { target: join(config.home, ".agents", "skills", "used-gone-skill"), broken: true },
+      },
+    ]);
+  });
+
   it("shows the absolute target of a relative link into a personal repository", async () => {
     const config = await fakeConfigDir();
     const target = join(config.home, "code", "my-skills", "release-notes");
