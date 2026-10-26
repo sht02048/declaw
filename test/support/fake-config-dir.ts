@@ -62,12 +62,14 @@ export class FakeConfigDir {
 
   async transcript(
     { project, session }: TranscriptLocation,
-    lines: TranscriptLine[],
+    lines: (TranscriptLine | string)[],
   ): Promise<this> {
     const file = join(this.path, "projects", encodeProjectDir(project), `${session}.jsonl`);
     await mkdir(dirname(file), { recursive: true });
-    const sessionLines = lines.map((line) => ({ sessionId: session, cwd: project, ...line }));
-    await writeFile(file, sessionLines.map((line) => JSON.stringify(line)).join("\n") + "\n");
+    const text = lines.map((line) =>
+      typeof line === "string" ? line : JSON.stringify({ sessionId: session, cwd: project, ...line }),
+    );
+    await writeFile(file, text.join("\n") + "\n");
     return this;
   }
 }

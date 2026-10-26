@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import { findStandaloneSkills } from "./inventory.js";
+import { partiallyReadable, readable, type ReadStatus } from "./read-status.js";
 import { readSkillLastUses } from "./skill-usage.js";
 import { findMainTranscripts, readTranscript } from "./transcripts.js";
 import { entryTimestamp, usesIn } from "./uses.js";
@@ -24,8 +25,16 @@ export interface StandaloneSkill {
 
 export type Installation = StandaloneSkill;
 
+export type { ReadStatus } from "./read-status.js";
+
+export interface DataSources {
+  transcripts: ReadStatus;
+  skillUsageCounter: ReadStatus;
+}
+
 export interface Report {
   period: CoveredPeriod;
+  sources: DataSources;
   installations: Installation[];
 }
 
@@ -38,9 +47,10 @@ export async function report({
   const usage = new Map<string, { uses: number; lastUse: Date | null }>();
   for (const skill of skills) usage.set(skill.name, { uses: 0, lastUse: null });
   let start: Date | null = null;
+  let skippedLines = 0;
 
   for (const file of await findMainTranscripts(configDir)) {
-    for await (const entry of readTranscript(file)) {
+    for await (const entry of readTranscript(file, () => skippedLines++)) {
       const at = entryTimestamp(entry);
       if (at !== null && (start === null || at < start)) start = at;
       for (const use of usesIn(entry)) {
@@ -60,6 +70,15 @@ export async function report({
 
   return {
     period: { start, end: now },
+    sources: {
+      transcripts:
+        skippedLines === 0
+          ? readable
+          : partiallyReadable(
+              `${skippedLines} unparsable transcript ${skippedLines === 1 ? "line" : "lines"} skipped`,
+            ),
+      skillUsageCounter: readable,
+    },
     installations: skills.map((skill) => ({
       kind: "standalone-skill",
       name: skill.name,

@@ -40,6 +40,10 @@ describe("declaw stats", () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(stdout)).toEqual({
       period: { start: "2026-09-28T07:15:00.000Z", end: "2026-10-26T00:00:00.000Z" },
+      sources: {
+        transcripts: { status: "readable" },
+        skillUsageCounter: { status: "readable" },
+      },
       installations: [
         {
           kind: "standalone-skill",

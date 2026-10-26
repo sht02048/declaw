@@ -20,10 +20,26 @@ export async function findMainTranscripts(configDir: string): Promise<string[]> 
   return files;
 }
 
-export async function* readTranscript(file: string): AsyncGenerator<TranscriptEntry> {
+export async function* readTranscript(
+  file: string,
+  onUnparsableLine: () => void,
+): AsyncGenerator<TranscriptEntry> {
   const lines = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
   for await (const line of lines) {
     if (line.trim() === "") continue;
-    yield JSON.parse(line) as TranscriptEntry;
+    const entry = parseLine(line);
+    if (entry === null) onUnparsableLine();
+    else yield entry;
+  }
+}
+
+function parseLine(line: string): TranscriptEntry | null {
+  try {
+    const entry: unknown = JSON.parse(line);
+    return typeof entry === "object" && entry !== null && !Array.isArray(entry)
+      ? (entry as TranscriptEntry)
+      : null;
+  } catch {
+    return null;
   }
 }

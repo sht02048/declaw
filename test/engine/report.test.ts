@@ -91,6 +91,10 @@ describe("report: Standalone Skill Usage Stats", () => {
 
     expect(result).toEqual({
       period: { start: null, end: now },
+      sources: {
+        transcripts: { status: "readable" },
+        skillUsageCounter: { status: "readable" },
+      },
       installations: [
         { kind: "standalone-skill", name: "linear-ticket", uses: 0, lastUse: null },
       ],
@@ -177,6 +181,48 @@ describe("report: skill history from the per-skill counter", () => {
 
     expect(result.installations).toEqual([
       { kind: "standalone-skill", name: "linear-ticket", uses: 0, lastUse: null },
+    ]);
+  });
+});
+
+describe("report: read status of each data source", () => {
+  it("marks every source readable when all of them parse", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources).toEqual({
+      transcripts: { status: "readable" },
+      skillUsageCounter: { status: "readable" },
+    });
+  });
+
+  it("skips a transcript line that cannot be parsed and marks transcripts partially readable", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("linear-ticket");
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      skillToolCall("linear-ticket", "2026-10-08T09:00:00.000Z"),
+      '{"type":"assistant","timestamp":"2026-10-08T09:05:00.000Z","message":{"content":[{"ty',
+      skillToolCall("linear-ticket", "2026-10-09T10:30:00.000Z"),
+    ]);
+
+    const result = await report({ configDir: config.path, now });
+
+    expect(result.sources.transcripts).toEqual({
+      status: "partial",
+      reason: "1 unparsable transcript line skipped",
+    });
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-skill",
+        name: "linear-ticket",
+        uses: 2,
+        lastUse: new Date("2026-10-09T10:30:00.000Z"),
+      },
     ]);
   });
 });
