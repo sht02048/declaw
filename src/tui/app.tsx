@@ -19,6 +19,7 @@ import {
   groupedByUsageStatus,
   groupHeader,
   hooksLine,
+  idOf,
   installationLine,
   isChild,
   listRowsOf,
@@ -252,7 +253,7 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
         return { ...state, cursor: Math.min(listRows.length - 1, state.cursor + 1) };
       case "expand": {
         if (!current) return state;
-        const expanded = withName(state.expanded, current.name, action.open);
+        const expanded = withId(state.expanded, idOf(current), action.open);
         const row = listRowsOf(installations, expanded).findIndex(
           (listRow) => installations[listRow.index] === current && !isChild(listRow),
         );
@@ -263,7 +264,7 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
         return {
           ...state,
           needsSelection: false,
-          selection: withName(state.selection, idOf(current), !state.selection.has(idOf(current))),
+          selection: withId(state.selection, idOf(current), !state.selection.has(idOf(current))),
         };
       case "select-recommended":
         return {
@@ -286,14 +287,10 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
   };
 }
 
-function idOf(installation: Installation): string {
-  return `${installation.kind} ${installation.name}`;
-}
-
-function withName(names: ReadonlySet<string>, name: string, present: boolean): ReadonlySet<string> {
-  const next = new Set(names);
-  if (present) next.add(name);
-  else next.delete(name);
+function withId(ids: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
+  const next = new Set(ids);
+  if (present) next.add(id);
+  else next.delete(id);
   return next;
 }
 
@@ -340,11 +337,11 @@ function listLines(
       focusEnd = lines.length;
     }
     if (listRow.hooks && installation.kind === "plugin") {
-      lines.push({ key: `${installation.name} hooks`, content: hooksLine(installation.hooks, onCursor) });
+      lines.push({ key: `${idOf(installation)} hooks`, content: hooksLine(installation.hooks, onCursor) });
     } else if (listRow.component !== undefined) {
       const component = installation.kind === "plugin" ? installation.components[listRow.component] : undefined;
       lines.push({
-        key: `${installation.name} ${component ? `${component.kind} ${component.name}` : "none"}`,
+        key: `${idOf(installation)} ${component ? `${component.kind} ${component.name}` : "none"}`,
         content: componentLine(component, { onCursor, columns, now }),
       });
     } else {

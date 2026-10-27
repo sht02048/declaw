@@ -10,9 +10,13 @@ export interface ListRow {
   hooks?: true;
 }
 
+export function idOf(installation: Installation): string {
+  return `${installation.kind} ${installation.name}`;
+}
+
 export function listRowsOf(installations: Installation[], expanded: ReadonlySet<string>): ListRow[] {
   return installations.flatMap((installation, index): ListRow[] => {
-    if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
+    if (installation.kind !== "plugin" || !expanded.has(idOf(installation))) return [{ index }];
     const count = Math.max(1, installation.components.length);
     return [
       { index },
