@@ -22,7 +22,11 @@ import {
   idOf,
   installationLine,
   isChild,
+  kindTabsOf,
   listRowsOf,
+  tabBar,
+  type Columns,
+  type KindTab,
 } from "./list.js";
 import { confirmHeading, confirmLines } from "./confirm.js";
 import { DetailPanel, detailLines } from "./detail.js";
@@ -52,29 +56,34 @@ type Keys = [key: string, label: string, color?: string][];
 
 const LIST_KEYS: Keys = [
   ["↑↓", "move"],
+  ["←→", "kind"],
   ["space", "select"],
   ["r", "recommended"],
-  ["→←", "expand"],
+  ["tab", "expand"],
   ["enter", "review"],
-  ["q", "quit"],
+  ["esc", "quit"],
 ];
 const CONFIRM_KEYS: Keys = [
-  ["y", "remove", "red"],
+  ["enter", "remove", "red"],
   ["esc", "back"],
   ["q", "quit"],
   ["↑↓", "scroll"],
 ];
 const SUMMARY_KEYS: Keys = [
   ["↑↓", "scroll"],
+  ["esc", "back"],
   ["q", "quit"],
 ];
 
 export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppProps) {
   const installations = useMemo(() => groupedByUsageStatus(report.installations), [report]);
+  const tabs = useMemo(() => kindTabsOf(installations), [installations]);
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
-  const [state, dispatch] = useReducer(reducerFor(installations, dryRun), INITIAL_STATE);
+  const [state, dispatch] = useReducer(reducerFor(installations, tabs, dryRun), INITIAL_STATE);
   const { screen, pageTop, selection } = state;
+  const remaining = installations.filter((installation) => !state.removed.has(idOf(installation)));
+  const shownInstallations = remaining.filter(tabs[state.tab]!.includes);
   const listTop = useRef(0);
 
   const selected = installations.filter((installation) => selection.has(idOf(installation)));
@@ -93,13 +102,21 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
 
   useEffect(() => {
     if (screen !== "running") return;
-    void cleanup(selected).then((outcomes) => dispatch({ type: "finished", outcomes }));
+    const removable = selected.filter(isRemovable);
+    void cleanup(selected).then((outcomes) =>
+      dispatch({
+        type: "finished",
+        outcomes,
+        removed: removable.filter((_, index) => outcomes[index]?.result === "removed").map(idOf),
+      }),
+    );
   }, [screen]);
 
-  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir, backupDir }), {
+  const body = bodyOf(state, shownInstallations, () => planCleanup(selected, { configDir, backupDir }), {
     dryRun,
     now,
-    columns,
+    table: columnsFor(installations, now, columns),
+    tabs: tabBar(tabs, state.tab, remaining),
     problems: formatSources(report.sources, { problemsOnly: true }),
   });
   const footer = footerOf(state, dryRun);
@@ -111,7 +128,9 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
     [installations, configDir, backupDir],
   );
   const current =
-    screen === "list" ? installations[listRowsOf(installations, state.expanded)[state.cursor]?.index ?? -1] : undefined;
+    screen === "list"
+      ? shownInstallations[listRowsOf(shownInstallations, state.expanded)[state.cursor]?.index ?? -1]
+      : undefined;
   const panel = current && rows - 1 - fixedHeight - panelHeight >= MIN_LIST_ROWS ? current : undefined;
   const gap: Line[] = screen === "list" && !panel ? [{ key: "panel gap", content: "" }] : [];
   const room = Math.max(3, rows - 1 - fixedHeight - (panel ? panelHeight : gap.length));
@@ -127,11 +146,14 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
   const view = windowFrom(heights, top, room);
 
   useInput((input, key) => {
-    if (key.escape) dispatch({ type: "back" });
-    else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
+    if (key.escape) {
+      if (screen === "list") exit();
+      else dispatch({ type: "back" });
+    } else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
     else if (key.downArrow) dispatch({ type: "down", lastPageTop: lastTop(heights, room) });
-    else if (key.rightArrow) dispatch({ type: "expand", open: true });
-    else if (key.leftArrow) dispatch({ type: "expand", open: false });
+    else if (key.rightArrow) dispatch({ type: "tab", step: 1 });
+    else if (key.leftArrow) dispatch({ type: "tab", step: -1 });
+    else if (key.tab) dispatch({ type: "expand" });
     else if (key.return) dispatch({ type: "review" });
     // Keys typed faster than a render arrive as one chunk, such as "r\r".
     else if (!key.ctrl && !key.meta) {
@@ -194,47 +216,61 @@ function keyBar(keys: Keys): ReactNode {
 
 interface State {
   screen: Screen;
+  tab: number;
   cursor: number;
   pageTop: number;
   outcomes: CleanupOutcome[];
   needsSelection: boolean;
   selection: ReadonlySet<string>;
   expanded: ReadonlySet<string>;
+  removed: ReadonlySet<string>;
 }
 
 type Action =
   | { type: "up"; lastPageTop: number }
   | { type: "down"; lastPageTop: number }
-  | { type: "expand"; open: boolean }
+  | { type: "tab"; step: number }
+  | { type: "expand" }
   | { type: "toggle" }
   | { type: "select-recommended" }
   | { type: "review" }
   | { type: "proceed" }
-  | { type: "finished"; outcomes: CleanupOutcome[] }
+  | { type: "finished"; outcomes: CleanupOutcome[]; removed: string[] }
   | { type: "back" };
 
 const INITIAL_STATE: State = {
   screen: "list",
+  tab: 0,
   cursor: 0,
   pageTop: 0,
   outcomes: [],
   needsSelection: false,
   selection: new Set(),
   expanded: new Set(),
+  removed: new Set(),
 };
 
-function reducerFor(installations: Installation[], dryRun: boolean) {
+function reducerFor(allInstallations: Installation[], tabs: KindTab[], dryRun: boolean) {
   return (state: State, action: Action): State => {
     if (state.screen === "running") {
       return action.type === "finished"
-        ? { ...state, screen: "summary", pageTop: 0, outcomes: action.outcomes }
+        ? {
+            ...state,
+            screen: "summary",
+            pageTop: 0,
+            outcomes: action.outcomes,
+            removed: new Set([...state.removed, ...action.removed]),
+          }
         : state;
     }
     if (state.screen === "confirm" || state.screen === "summary") {
       switch (action.type) {
         case "back":
-          return state.screen === "confirm" ? { ...state, screen: "list" } : state;
+          return state.screen === "confirm"
+            ? { ...state, screen: "list" }
+            : { ...state, screen: "list", cursor: 0, selection: new Set() };
         case "proceed":
+        case "review":
           return state.screen === "confirm" && !dryRun ? { ...state, screen: "running" } : state;
         case "up":
           return { ...state, pageTop: Math.max(0, Math.min(state.pageTop, action.lastPageTop) - 1) };
@@ -244,16 +280,21 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
           return state;
       }
     }
+    const installations = allInstallations.filter(
+      (installation) => !state.removed.has(idOf(installation)) && tabs[state.tab]!.includes(installation),
+    );
     const listRows = listRowsOf(installations, state.expanded);
     const current = installations[listRows[state.cursor]?.index ?? -1];
     switch (action.type) {
+      case "tab":
+        return { ...state, tab: (state.tab + action.step + tabs.length) % tabs.length, cursor: 0 };
       case "up":
         return { ...state, cursor: Math.max(0, state.cursor - 1) };
       case "down":
         return { ...state, cursor: Math.min(listRows.length - 1, state.cursor + 1) };
       case "expand": {
         if (!current) return state;
-        const expanded = withId(state.expanded, idOf(current), action.open);
+        const expanded = withId(state.expanded, idOf(current), !state.expanded.has(idOf(current)));
         const row = listRowsOf(installations, expanded).findIndex(
           (listRow) => installations[listRow.index] === current && !isChild(listRow),
         );
@@ -304,16 +345,16 @@ interface Body {
 interface Layout {
   dryRun: boolean;
   now: Date;
-  columns: number;
+  table: Columns;
+  tabs: ReactNode;
   problems: string[];
 }
 
 function listLines(
   installations: Installation[],
   { cursor, selection, expanded }: State,
-  { now, columns: width, problems }: Layout,
+  { now, table: columns, tabs, problems }: Layout,
 ): Body {
-  const columns = columnsFor(installations, now, width);
   const listRows = listRowsOf(installations, expanded);
   const lines: Line[] = [];
   let focus = 0;
@@ -358,6 +399,7 @@ function listLines(
   });
   return {
     header: [
+      { key: "tabs", content: tabs },
       {
         key: "counts",
         element: (
@@ -374,7 +416,6 @@ function listLines(
         ),
       },
       ...problems.map((text): Line => ({ key: text, content: text, style: "warning" })),
-      { key: "gap", content: "" },
       { key: "columns", content: columnHeader(columns) },
     ],
     lines,

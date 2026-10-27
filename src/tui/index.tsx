@@ -20,7 +20,7 @@ export async function runInteractive({
     return 1;
   }
   const runClaude = claudeCliRunner();
-  let outcomes: CleanupOutcome[] | undefined;
+  const outcomes: CleanupOutcome[] = [];
   const instance = render(
     <App
       report={report}
@@ -28,13 +28,15 @@ export async function runInteractive({
       backupDir={backupDir}
       now={new Date()}
       dryRun={dryRun}
-      cleanup={async (selection) =>
-        (outcomes = await cleanup(selection, { configDir, configFile, backupDir, trash: systemTrash, runClaude }))
-      }
+      cleanup={async (selection) => {
+        const run = await cleanup(selection, { configDir, configFile, backupDir, trash: systemTrash, runClaude });
+        outcomes.push(...run);
+        return run;
+      }}
     />,
     { alternateScreen: true },
   );
   await instance.waitUntilExit();
-  if (outcomes) process.stdout.write(formatCleanupSummary(outcomes));
+  if (outcomes.length > 0) process.stdout.write(formatCleanupSummary(outcomes));
   return 0;
 }

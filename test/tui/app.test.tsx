@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { render } from "ink-testing-library";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { cleanup, report, type CleanupOutcome, type Installation } from "../../src/engine/index.js";
 import { App } from "../../src/tui/app.js";
@@ -27,7 +28,7 @@ describe("TUI", () => {
   it("renders the list of Installations under the covered period", async () => {
     const { config, result } = await exampleReport();
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const frame = lastFrame()!;
     expect(frame.split("\n")[0]).toBe(TITLE);
@@ -41,14 +42,14 @@ describe("TUI", () => {
     await config.corruptInstallRecords();
     const result = await report({ ...config.paths, now });
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     expect(lastFrame()).toMatch(/Install records: unreadable \(.+\)/);
   });
 
   it("selects the recommended set in one step", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r");
 
@@ -57,7 +58,7 @@ describe("TUI", () => {
 
   it("toggles the Installation under the cursor", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, DOWN, " ", DOWN, " ");
 
@@ -66,7 +67,7 @@ describe("TUI", () => {
 
   it("shows a Synced Skill but never selects it", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, " ");
 
@@ -78,9 +79,9 @@ describe("TUI", () => {
 
   it("expands a Plugin to show Uses per Component, and collapses it again", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
-    await press(stdin, DOWN, DOWN, DOWN, RIGHT);
+    await press(stdin, DOWN, DOWN, DOWN, TAB);
 
     const lines = lastFrame()!.split("\n");
     const component = (name: string) => lines.find((line) => line.includes(name))?.trim().split(/\s{2,}/);
@@ -88,7 +89,7 @@ describe("TUI", () => {
     expect(component("vercel:logs")).toEqual(["├─ vercel:logs", "skill", "0", "never"]);
     expect(component("vercel:deployer")).toEqual(["├─ vercel:deployer", "agent", "0", "never"]);
 
-    await press(stdin, LEFT);
+    await press(stdin, TAB);
 
     expect(lastFrame()).not.toContain("vercel:deploy");
   });
@@ -107,13 +108,13 @@ describe("TUI hook counts", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const row = (name: string) => lastFrame()!.split("\n").find((line) => line.includes(name));
     expect(row("hooked@market")).toMatch(/\s2$/);
     expect(row("quiet@market")).toMatch(/\s0$/);
 
-    await press(stdin, RIGHT);
+    await press(stdin, TAB);
 
     expect(lastFrame()).toContain("2 hooks run every session");
   });
@@ -128,7 +129,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -151,11 +152,11 @@ describe("TUI in a short terminal", () => {
       skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
-    await press(stdin, ...Array.from({ length: 12 }, () => DOWN), RIGHT);
+    await press(stdin, ...Array.from({ length: 12 }, () => DOWN), TAB);
     expect(lastFrame()).toContain("big:a");
     await press(stdin, ...Array.from({ length: 6 }, () => DOWN));
 
@@ -175,7 +176,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -196,7 +197,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     let rows = 16;
     Object.defineProperty(stdout, "rows", { get: () => rows });
     stdout.emit("resize");
@@ -219,7 +220,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -248,7 +249,7 @@ async function cleanupReport() {
 describe("TUI confirmation screen", () => {
   it("groups the selected Installations by planned action under a heading, then lists how to undo each", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
@@ -274,7 +275,7 @@ describe("TUI confirmation screen", () => {
 
   it("reviews a selection made in the same burst of keys", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, `r${ENTER}`);
 
@@ -283,7 +284,7 @@ describe("TUI confirmation screen", () => {
 
   it("asks for a selection when reviewing with nothing selected", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, ENTER);
 
@@ -293,7 +294,7 @@ describe("TUI confirmation screen", () => {
 
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, " ", ENTER, ESCAPE);
 
@@ -302,29 +303,29 @@ describe("TUI confirmation screen", () => {
 
   it("offers no way past the confirmation screen in a dry run", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", ENTER, ENTER, "y");
 
     expect(lastFrame()).toContain("Dry run: nothing will be changed");
     expect(lastFrame()).not.toContain("Remove 3 Installations?");
     expect(lastFrame()).toContain("ux-writing: restore it from the system trash");
-    expect(lastFrame()).not.toContain("y remove");
+    expect(lastFrame()).not.toContain("enter remove");
   });
 });
 
 describe("TUI Cleanup", () => {
-  it("runs the Cleanup on y and lists each Installation with its outcome", async () => {
+  it("runs the Cleanup on enter and lists each Installation with its outcome", async () => {
     const { config, result } = await cleanupReport();
     const trash = fakeTrash(join(config.home, ".Trash"));
     const run = (selection: Installation[]) =>
       cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
-    expect(lastFrame()).toContain("y remove");
-    await press(stdin, "y");
+    expect(lastFrame()).toContain("enter remove");
+    await press(stdin, ENTER);
     await settle();
 
     const target = join(config.home, ".agents", "skills", "find-skills");
@@ -356,7 +357,7 @@ describe("TUI Cleanup", () => {
     const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
     const run = (selection: Installation[]) =>
       cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER, "y");
@@ -369,23 +370,99 @@ describe("TUI Cleanup", () => {
     expect(lines[failed + 1]).toBe(`    could not move ${folder} to the trash`);
     expect(lastFrame()).not.toContain("Moved to the system trash");
   });
+
+  it("goes back on esc to the list without the removed Installations and with nothing selected", async () => {
+    const { config, result } = await cleanupReport();
+    const folder = join(config.path, "skills", "ux-writing");
+    const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, "r", ENTER, ENTER);
+    await settle();
+    await press(stdin, ESCAPE);
+
+    expect(lastFrame()).toContain("ux-writing");
+    expect(lastFrame()).not.toContain("idle@market");
+    expect(lastFrame()).not.toContain("find-skills");
+    expect(lastFrame()).toMatch(/\s0 selected/);
+  });
+});
+
+describe("TUI quitting", () => {
+  it("quits on esc from the list", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    await press(stdin, ESCAPE);
+
+    expect(lastFrame()).toBe("");
+  });
+});
+
+describe("TUI kind tabs", () => {
+  async function tabsReport() {
+    const { config } = await exampleReport();
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    return { config, result: await report({ ...config.paths, now }) };
+  }
+
+  it("lists every kind with its count, leaving out kinds with no Installation", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    expect(plain(lastFrame()!).split("\n")[1]).toMatch(/^Plugins 2 {2}Skills 2 {2}All 4$/);
+  });
+
+  it("opens on Plugins, then shows one kind at a time with right and left, wrapping around", async () => {
+    const { config, result } = await tabsReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const names = () => ["vercel@market", "idle@market", "ux-writing", "anthropic-skills:brand-voice", "pencil"].filter((name) => lastFrame()!.includes(name));
+
+    expect(names()).toEqual(["vercel@market", "idle@market"]);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["ux-writing", "anthropic-skills:brand-voice"]);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["pencil"]);
+    await press(stdin, RIGHT);
+    expect(names()).toHaveLength(5);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["vercel@market", "idle@market"]);
+    await press(stdin, LEFT);
+    expect(names()).toHaveLength(5);
+  });
+
+  it("counts and selects the recommended set within the shown kind, keeping the selection across kinds", async () => {
+    const { config, result } = await tabsReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    await press(stdin, RIGHT);
+    expect(plain(lastFrame()!).split("\n")[2]).toMatch(/^2 Unused {2}0 Used · 1 recommended\s+0 selected$/);
+
+    await press(stdin, "r", LEFT, LEFT);
+
+    expect(selected(lastFrame()!)).toEqual(["ux-writing"]);
+    expect(lastFrame()).toMatch(/\s1 selected/);
+  });
 });
 
 describe("TUI groups", () => {
   it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
-    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
+    expect(lastFrame()!.split("\n")[2]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
 
     await press(stdin, "r");
 
-    expect(lastFrame()!.split("\n")[1]).toMatch(/\s2 selected$/);
+    expect(lastFrame()!.split("\n")[2]).toMatch(/\s2 selected$/);
   });
 
   it("lists Installations under a header per Usage Status that the cursor skips", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     const lines = () => lastFrame()!.split("\n");
 
     expect(lines().map((line) => line.trim())).toEqual(expect.arrayContaining(["Unused  3", "Used  1"]));
@@ -408,7 +485,7 @@ describe("TUI detail panel", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 200, rows: 40 });
     await settle();
     const withCursorOn = async (name: string) => {
@@ -443,7 +520,7 @@ async function mcpReport() {
 describe("TUI Standalone MCP Servers", () => {
   it("lists each server as an mcp row with an empty hooks cell", async () => {
     const { config, result } = await mcpReport();
-    const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 120, rows: 40 });
     await settle();
 
@@ -457,7 +534,7 @@ describe("TUI Standalone MCP Servers", () => {
 
   it("describes the server under the cursor: transport, what is known, and what a Cleanup would do", async () => {
     const { config, result } = await mcpReport();
-    const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 240, rows: 40 });
     await settle();
 
@@ -475,7 +552,7 @@ describe("TUI Standalone MCP Servers", () => {
 
   it("groups selected servers on the confirmation screen with the remove command, backup file, and undo command", async () => {
     const { config, result } = await mcpReport();
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
@@ -497,7 +574,7 @@ describe("TUI Standalone MCP Servers", () => {
     const claude = fakeClaude();
     const run = (selection: Installation[]) =>
       cleanup(selection, { ...cleanupPaths(config), trash: fakeTrash(join(config.home, ".Trash")).move, runClaude: claude.run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, " ", ENTER, "y");
@@ -529,7 +606,7 @@ describe("TUI Standalone MCP Servers", () => {
     const claude = fakeClaude();
     const run = (selection: Installation[]) =>
       cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: claude.run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, " ");
@@ -551,7 +628,7 @@ describe("TUI Standalone MCP Servers", () => {
     const claude = fakeClaude();
     const run = (selection: Installation[]) =>
       cleanup(selection, { ...cleanupPaths(config), trash: fakeTrash(join(config.home, ".Trash")).move, runClaude: claude.run });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={run} />);
+    const { lastFrame, stdin } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={run} />);
 
     await press(stdin, "r", ENTER, "y");
     await settle();
@@ -575,7 +652,7 @@ describe("TUI layout", () => {
     const result = await report({ ...config.paths, now });
 
     for (const columns of [100, 60]) {
-      const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+      const { lastFrame, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
       resize(stdout, { columns, rows: 40 });
       await settle();
 
@@ -608,6 +685,13 @@ const UP = "\u001B[A";
 const DOWN = "\u001B[B";
 const RIGHT = "\u001B[C";
 const LEFT = "\u001B[D";
+const TAB = "\t";
+
+async function renderOnAll(node: ReactElement) {
+  const rendered = render(node);
+  await press(rendered.stdin, LEFT);
+  return rendered;
+}
 
 async function press(stdin: { write: (data: string) => void }, ...keys: string[]) {
   for (const key of keys) {
