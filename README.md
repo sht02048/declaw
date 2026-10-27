@@ -8,18 +8,7 @@
 npx declaw
 ```
 
-```
-declaw  Usage Stats 2026-09-28 – 2026-10-26 · 29 days
-Plugins 3  Skills 4  MCP Servers 2  All 9
-2 Unused  1 Used · 2 recommended                   0 selected
-      name                      kind    uses  last use  hooks
-  Unused  2
-› ○ ★ pdf-tools@acme-plugins    plugin     0  never         0
-  ○ ★ standup@acme-plugins      plugin     0  never         1
-
-  Used  1
-  ○   deploy-kit@acme-plugins   plugin    14  2d ago        2
-```
+<img src="docs/assets/screenshot.png" alt="declaw listing Installations by Usage Status, with five Unused ones selected for Cleanup">
 
 Plugins pile up. Each one can bring skills, commands, subagents, MCP servers, and hooks that run every session, and nothing tells you which of them you still use. declaw reads Claude Code's local transcripts and shows, for every Installation, how many Uses it had and when you last used it. Then you pick what goes.
 
@@ -113,30 +102,6 @@ There is no long-term counter for MCP servers, so a server's last Use comes from
 For each selected server, declaw first reads its registration again and copies it as-is to `~/.declaw/backups/<run time>/<name>.json`, one folder per interactive run, readable only by you (the file is `0600` and the folders `0700`), because the registration can hold tokens. Only then does it run `claude mcp remove <name> --scope user`. If the registration is gone or the backup cannot be written, the server is left in place and the removal is reported as failed. declaw never deletes old backups. The undo command reads the backup itself, so no token has to be pasted. A server that signs in with OAuth needs a new login in `/mcp` after it is added back, since Claude Code keeps its OAuth tokens elsewhere and they are not part of the backup.
 
 </details>
-
-## Development
-
-To run declaw from a clone, each of these builds first:
-
-```sh
-npm start                  # interactive Cleanup, same as `declaw`
-npm run dry-run            # interactive, ending at the confirmation screen
-npm run stats              # Usage Stats table
-npm start -- stats --json  # pass any other arguments after --
-```
-
-```sh
-npm install          # install dev dependencies
-npm test             # run the test suite once (Vitest)
-npm run test:watch   # rerun tests on change
-npm run typecheck    # type-check sources and tests
-npm run build        # compile to dist/ with tsc
-node dist/cli.js stats   # run the built CLI
-```
-
-Tests go through the engine's `report`, `planCleanup`, and `cleanup` operations and build a fake Claude Code config directory in a temp folder with the helpers in `test/support/fake-config-dir.ts`. `cleanup` takes its trash mover and `claude` CLI runner as arguments, so its tests pass the fakes in `test/support/fake-effects.ts` and check the moves and calls they recorded instead of using the real system trash or running the real `claude plugin uninstall` or `claude mcp remove`. Its tests also pass a temporary backup folder, never `~/.declaw`. The real trash mover uses the [trash](https://github.com/sindresorhus/trash) package and lives in `src/system-effects.ts`. Never point tests at a real `~/.claude`. Fixtures set creation times through `test/support/birth-times.ts`, which the setup file feeds into `lstat`, because Node cannot set a file's birth time. The interactive list is built with [Ink](https://github.com/vadimdemedes/ink), and its tests in `test/tui` render it from a fixture with `ink-testing-library`, so they need no real terminal.
-
-The landing page is a single static file, `site/index.html`. Domain terms are defined in [GLOSSARY.md](GLOSSARY.md), and design decisions are recorded in [docs/adr](docs/adr).
 
 ## License
 
