@@ -250,6 +250,16 @@ describe("report: Standalone MCP Server Usage Stats", () => {
     expect(result.installations.map((installation) => installation.name)).toEqual(["context7"]);
   });
 
+  it("lists a WebSocket registration with its ws transport", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("events-server", { type: "ws", url: "wss://events.example.com/mcp" });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([{ name: "events-server", transport: "ws" }]);
+    expect(result.sources.mcpServerRegistrations).toEqual({ status: "readable" });
+  });
+
   it("treats a registration without a transport as stdio", async () => {
     const config = await fakeConfigDir();
     await config.mcpServer("pencil", { command: "pencil-mcp" });

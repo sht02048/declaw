@@ -1,7 +1,7 @@
 import { plural } from "../plural.js";
 import { isJsonObject, partiallyReadable, readable, readJsonFile, unreadable, type ReadStatus } from "./read-status.js";
 
-export type McpTransport = "stdio" | "http" | "sse";
+export type McpTransport = "stdio" | "http" | "sse" | "ws";
 
 export interface McpServerRecord {
   name: string;
@@ -13,7 +13,7 @@ export interface McpServersRead {
   servers: McpServerRecord[];
 }
 
-const TRANSPORTS = new Set<unknown>(["stdio", "http", "sse"]);
+const TRANSPORTS = new Set<unknown>(["stdio", "http", "sse", "ws"]);
 
 export async function readMcpServers(configFile: string): Promise<McpServersRead> {
   const registrations = await readRegistrations(configFile);
