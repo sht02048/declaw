@@ -64,7 +64,7 @@ const LIST_KEYS: Keys = [
   ["esc", "quit"],
 ];
 const CONFIRM_KEYS: Keys = [
-  ["y", "remove", "red"],
+  ["enter", "remove", "red"],
   ["esc", "back"],
   ["q", "quit"],
   ["↑↓", "scroll"],
@@ -251,6 +251,7 @@ function reducerFor(allInstallations: Installation[], tabs: KindTab[], dryRun: b
         case "back":
           return state.screen === "confirm" ? { ...state, screen: "list" } : state;
         case "proceed":
+        case "review":
           return state.screen === "confirm" && !dryRun ? { ...state, screen: "running" } : state;
         case "up":
           return { ...state, pageTop: Math.max(0, Math.min(state.pageTop, action.lastPageTop) - 1) };

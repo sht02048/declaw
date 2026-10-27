@@ -310,12 +310,12 @@ describe("TUI confirmation screen", () => {
     expect(lastFrame()).toContain("Dry run: nothing will be changed");
     expect(lastFrame()).not.toContain("Remove 3 Installations?");
     expect(lastFrame()).toContain("ux-writing: restore it from the system trash");
-    expect(lastFrame()).not.toContain("y remove");
+    expect(lastFrame()).not.toContain("enter remove");
   });
 });
 
 describe("TUI Cleanup", () => {
-  it("runs the Cleanup on y and lists each Installation with its outcome", async () => {
+  it("runs the Cleanup on enter and lists each Installation with its outcome", async () => {
     const { config, result } = await cleanupReport();
     const trash = fakeTrash(join(config.home, ".Trash"));
     const run = (selection: Installation[]) =>
@@ -324,8 +324,8 @@ describe("TUI Cleanup", () => {
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
-    expect(lastFrame()).toContain("y remove");
-    await press(stdin, "y");
+    expect(lastFrame()).toContain("enter remove");
+    await press(stdin, ENTER);
     await settle();
 
     const target = join(config.home, ".agents", "skills", "find-skills");
