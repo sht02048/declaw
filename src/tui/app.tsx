@@ -56,7 +56,7 @@ const LIST_KEYS: Keys = [
   ["r", "recommended"],
   ["→←", "expand"],
   ["enter", "review"],
-  ["q", "quit"],
+  ["esc", "quit"],
 ];
 const CONFIRM_KEYS: Keys = [
   ["y", "remove", "red"],
@@ -66,7 +66,7 @@ const CONFIRM_KEYS: Keys = [
 ];
 const SUMMARY_KEYS: Keys = [
   ["↑↓", "scroll"],
-  ["q", "quit"],
+  ["esc", "quit"],
 ];
 
 export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppProps) {
@@ -127,8 +127,10 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
   const view = windowFrom(heights, top, room);
 
   useInput((input, key) => {
-    if (key.escape) dispatch({ type: "back" });
-    else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
+    if (key.escape) {
+      if (screen === "confirm") dispatch({ type: "back" });
+      else if (screen !== "running") exit();
+    } else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
     else if (key.downArrow) dispatch({ type: "down", lastPageTop: lastTop(heights, room) });
     else if (key.rightArrow) dispatch({ type: "expand", open: true });
     else if (key.leftArrow) dispatch({ type: "expand", open: false });

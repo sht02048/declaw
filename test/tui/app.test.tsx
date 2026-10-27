@@ -371,6 +371,17 @@ describe("TUI Cleanup", () => {
   });
 });
 
+describe("TUI quitting", () => {
+  it("quits on esc from the list", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    await press(stdin, ESCAPE);
+
+    expect(lastFrame()).toBe("");
+  });
+});
+
 describe("TUI groups", () => {
   it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
     const { config, result } = await exampleReport();
