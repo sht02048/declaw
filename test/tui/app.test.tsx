@@ -80,7 +80,7 @@ describe("TUI", () => {
     const { config, result } = await exampleReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
-    await press(stdin, DOWN, DOWN, DOWN, RIGHT);
+    await press(stdin, DOWN, DOWN, DOWN, TAB);
 
     const lines = lastFrame()!.split("\n");
     const component = (name: string) => lines.find((line) => line.includes(name))?.trim().split(/\s{2,}/);
@@ -88,7 +88,7 @@ describe("TUI", () => {
     expect(component("vercel:logs")).toEqual(["├─ vercel:logs", "skill", "0", "never"]);
     expect(component("vercel:deployer")).toEqual(["├─ vercel:deployer", "agent", "0", "never"]);
 
-    await press(stdin, LEFT);
+    await press(stdin, TAB);
 
     expect(lastFrame()).not.toContain("vercel:deploy");
   });
@@ -113,7 +113,7 @@ describe("TUI hook counts", () => {
     expect(row("hooked@market")).toMatch(/\s2$/);
     expect(row("quiet@market")).toMatch(/\s0$/);
 
-    await press(stdin, RIGHT);
+    await press(stdin, TAB);
 
     expect(lastFrame()).toContain("2 hooks run every session");
   });
@@ -155,7 +155,7 @@ describe("TUI in a short terminal", () => {
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
-    await press(stdin, ...Array.from({ length: 12 }, () => DOWN), RIGHT);
+    await press(stdin, ...Array.from({ length: 12 }, () => DOWN), TAB);
     expect(lastFrame()).toContain("big:a");
     await press(stdin, ...Array.from({ length: 6 }, () => DOWN));
 
@@ -382,16 +382,62 @@ describe("TUI quitting", () => {
   });
 });
 
+describe("TUI kind tabs", () => {
+  async function tabsReport() {
+    const { config } = await exampleReport();
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    return { config, result: await report({ ...config.paths, now }) };
+  }
+
+  it("lists every kind with its count, leaving out kinds with no Installation", async () => {
+    const { config, result } = await exampleReport();
+    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    expect(plain(lastFrame()!).split("\n")[1]).toMatch(/^All 4 {2}Plugins 2 {2}Skills 2$/);
+  });
+
+  it("shows one kind at a time with right and left, wrapping around", async () => {
+    const { config, result } = await tabsReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const names = () => ["vercel@market", "idle@market", "ux-writing", "anthropic-skills:brand-voice", "pencil"].filter((name) => lastFrame()!.includes(name));
+
+    expect(names()).toHaveLength(5);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["vercel@market", "idle@market"]);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["ux-writing", "anthropic-skills:brand-voice"]);
+    await press(stdin, RIGHT);
+    expect(names()).toEqual(["pencil"]);
+    await press(stdin, RIGHT);
+    expect(names()).toHaveLength(5);
+    await press(stdin, LEFT);
+    expect(names()).toEqual(["pencil"]);
+  });
+
+  it("counts and selects the recommended set within the shown kind, keeping the selection across kinds", async () => {
+    const { config, result } = await tabsReport();
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+
+    await press(stdin, RIGHT, RIGHT);
+    expect(plain(lastFrame()!).split("\n")[2]).toMatch(/^2 Unused {2}0 Used · 1 recommended\s+0 selected$/);
+
+    await press(stdin, "r", LEFT, LEFT);
+
+    expect(selected(lastFrame()!)).toEqual(["ux-writing"]);
+    expect(lastFrame()).toMatch(/\s1 selected/);
+  });
+});
+
 describe("TUI groups", () => {
   it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
     const { config, result } = await exampleReport();
     const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
-    expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
+    expect(lastFrame()!.split("\n")[2]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
 
     await press(stdin, "r");
 
-    expect(lastFrame()!.split("\n")[1]).toMatch(/\s2 selected$/);
+    expect(lastFrame()!.split("\n")[2]).toMatch(/\s2 selected$/);
   });
 
   it("lists Installations under a header per Usage Status that the cursor skips", async () => {
@@ -619,6 +665,7 @@ const UP = "\u001B[A";
 const DOWN = "\u001B[B";
 const RIGHT = "\u001B[C";
 const LEFT = "\u001B[D";
+const TAB = "\t";
 
 async function press(stdin: { write: (data: string) => void }, ...keys: string[]) {
   for (const key of keys) {

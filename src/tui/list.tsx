@@ -44,6 +44,33 @@ export function groupedByUsageStatus(installations: Installation[]): Installatio
   return STATUS_ORDER.flatMap((status) => installations.filter((i) => i.usageStatus === status));
 }
 
+export interface KindTab {
+  label: string;
+  includes: (installation: Installation) => boolean;
+}
+
+const KIND_TABS: KindTab[] = [
+  { label: "All", includes: () => true },
+  { label: "Plugins", includes: (installation) => installation.kind === "plugin" },
+  { label: "Skills", includes: (installation) => installation.kind === "standalone-skill" },
+  { label: "MCP Servers", includes: (installation) => installation.kind === "standalone-mcp-server" },
+];
+
+export function kindTabsOf(installations: Installation[]): KindTab[] {
+  return KIND_TABS.filter((tab, index) => index === 0 || installations.some(tab.includes));
+}
+
+export function tabBar(tabs: KindTab[], active: number, installations: Installation[]): ReactNode {
+  return tabs.map((tab, index) => (
+    <Text key={tab.label}>
+      {index > 0 && "  "}
+      <Text bold={index === active} {...(index === active ? { color: ACCENT } : { dimColor: true })}>
+        {`${tab.label} ${installations.filter(tab.includes).length}`}
+      </Text>
+    </Text>
+  ));
+}
+
 export function countsLine(installations: Installation[]): ReactNode {
   const counts = STATUS_ORDER.map((status) => ({
     status,
