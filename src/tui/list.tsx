@@ -49,15 +49,16 @@ export interface KindTab {
   includes: (installation: Installation) => boolean;
 }
 
+const ALL_TAB: KindTab = { label: "All", includes: () => true };
+
 const KIND_TABS: KindTab[] = [
-  { label: "All", includes: () => true },
   { label: "Plugins", includes: (installation) => installation.kind === "plugin" },
   { label: "Skills", includes: (installation) => installation.kind === "standalone-skill" },
   { label: "MCP Servers", includes: (installation) => installation.kind === "standalone-mcp-server" },
 ];
 
 export function kindTabsOf(installations: Installation[]): KindTab[] {
-  return KIND_TABS.filter((tab, index) => index === 0 || installations.some(tab.includes));
+  return [...KIND_TABS.filter((tab) => installations.some(tab.includes)), ALL_TAB];
 }
 
 export function tabBar(tabs: KindTab[], active: number, installations: Installation[]): ReactNode {
