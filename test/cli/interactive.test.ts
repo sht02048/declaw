@@ -40,7 +40,16 @@ describe("declaw", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]!.dryRun).toBe(false);
     expect(sessions[0]!.configDir).toBe(config.path);
+    expect(sessions[0]!.configFile).toBe(config.configFile);
     expect(sessions[0]!.report.installations.map((i) => i.name)).toEqual(["ux-writing"]);
+  });
+
+  it("chooses one backup folder for the run, named by its start time under ~/.declaw/backups", async () => {
+    const config = await exampleConfig();
+
+    const { sessions } = await runCli([], { CLAUDE_CONFIG_DIR: config.path });
+
+    expect(sessions[0]!.backupDir).toBe("/nonexistent/.declaw/backups/2026-10-26T00-00-00Z");
   });
 
   it("opens it as a dry run with --dry-run", async () => {

@@ -4,6 +4,7 @@ import { isRemovable, planCleanup, report, type Installation, type Report } from
 import { fakeConfigDir } from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
+const backupDir = "/home/me/.declaw/backups/2026-10-26T00-00-00Z";
 
 function named(result: Report, ...names: string[]): Installation[] {
   return names.map((name) => {
@@ -21,6 +22,7 @@ describe("planCleanup", () => {
 
     const plan = planCleanup(named(result, "vercel@claude-plugins-official"), {
       configDir: config.path,
+      backupDir,
     });
 
     expect(plan).toEqual([
@@ -39,7 +41,7 @@ describe("planCleanup", () => {
     await config.linkedSkill("find-skills", { target });
     const result = await report({ ...config.paths, now });
 
-    const plan = planCleanup(named(result, "find-skills"), { configDir: config.path });
+    const plan = planCleanup(named(result, "find-skills"), { configDir: config.path, backupDir });
 
     const path = join(config.path, "skills", "find-skills");
     expect(plan).toEqual([
@@ -58,7 +60,7 @@ describe("planCleanup", () => {
     await config.standaloneSkill("ux-writing");
     const result = await report({ ...config.paths, now });
 
-    const plan = planCleanup(named(result, "ux-writing"), { configDir: config.path });
+    const plan = planCleanup(named(result, "ux-writing"), { configDir: config.path, backupDir });
 
     expect(plan).toEqual([
       { kind: "move-to-trash", name: "ux-writing", path: join(config.path, "skills", "ux-writing") },
@@ -72,10 +74,44 @@ describe("planCleanup", () => {
     const result = await report({ ...config.paths, now });
     const [synced, real] = named(result, "anthropic-skills:brand-voice", "ux-writing");
 
-    const plan = planCleanup([synced!, real!], { configDir: config.path });
+    const plan = planCleanup([synced!, real!], { configDir: config.path, backupDir });
 
     expect(plan.map((action) => action.name)).toEqual(["ux-writing"]);
     expect(isRemovable(synced!)).toBe(false);
     expect(isRemovable(real!)).toBe(true);
+  });
+
+  it("plans removing a Standalone MCP Server at user scope after a backup, with the command that adds it back", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    const result = await report({ ...config.paths, now });
+
+    const plan = planCleanup(named(result, "context7"), { configDir: config.path, backupDir });
+
+    expect(plan).toEqual([
+      {
+        kind: "remove-mcp-server",
+        name: "context7",
+        scope: "user",
+        backupPath: `${backupDir}/context7.json`,
+        addBackCommand: `claude mcp add-json context7 "$(cat '${backupDir}/context7.json')" --scope user`,
+      },
+    ]);
+  });
+
+  it("quotes a server name and backup path the shell would split, and keeps the backup file name safe", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("it's/docs", { command: "docs" });
+    const result = await report({ ...config.paths, now });
+    const quirkyBackupDir = "/home/me/My Backups/it's";
+
+    const plan = planCleanup(named(result, "it's/docs"), { configDir: config.path, backupDir: quirkyBackupDir });
+
+    expect(plan).toEqual([
+      expect.objectContaining({
+        backupPath: "/home/me/My Backups/it's/it_s_docs.json",
+        addBackCommand: `claude mcp add-json 'it'\\''s/docs' "$(cat '/home/me/My Backups/it'\\''s/it_s_docs.json')" --scope user`,
+      }),
+    ]);
   });
 });

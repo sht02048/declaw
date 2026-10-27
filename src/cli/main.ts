@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { resolveConfigDir, resolveConfigFile } from "../config-dir.js";
 import { report, type Report } from "../engine/index.js";
 import { formatStatsJson, formatStatsText } from "./stats.js";
@@ -5,6 +6,8 @@ import { formatStatsJson, formatStatsText } from "./stats.js";
 export interface InteractiveSession {
   report: Report;
   configDir: string;
+  configFile: string;
+  backupDir: string;
   dryRun: boolean;
 }
 
@@ -30,9 +33,15 @@ export async function run(argv: string[], context: CliContext): Promise<number> 
     return 0;
   }
   if (argv.every((flag) => flag === "--dry-run")) {
-    const result = await report({ configDir, configFile, now: context.now() });
-    return context.interactive({ report: result, configDir, dryRun: argv.includes("--dry-run") });
+    const now = context.now();
+    const result = await report({ configDir, configFile, now });
+    const backupDir = join(context.homeDir, ".declaw", "backups", runTimeOf(now));
+    return context.interactive({ report: result, configDir, configFile, backupDir, dryRun: argv.includes("--dry-run") });
   }
   context.stderr(USAGE);
   return 1;
+}
+
+function runTimeOf(now: Date): string {
+  return `${now.toISOString().slice(0, 19).replaceAll(":", "-")}Z`;
 }

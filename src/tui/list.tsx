@@ -76,6 +76,7 @@ interface Kind {
 
 export function shortKind(installation: Installation): Kind {
   if (installation.kind === "plugin") return { label: "plugin", color: "magenta" };
+  if (installation.kind === "standalone-mcp-server") return { label: "mcp", color: "blueBright" };
   if (installation.linked?.broken) return { label: "broken link", color: "red" };
   if (installation.linked) return { label: "link", color: "cyan" };
   if (installation.synced) return { label: "synced", color: "gray" };

@@ -1,7 +1,7 @@
 import { Text } from "ink";
 import type { ReactNode } from "react";
 import type { PlannedAction } from "../engine/index.js";
-import { actionText } from "../cli/actions.js";
+import { actionText, UNDO_NOTES } from "../cli/actions.js";
 import { countOf } from "../plural.js";
 
 export interface ScreenLine {
@@ -14,6 +14,7 @@ const ACTION_GROUPS: [PlannedAction["kind"], string][] = [
   ["uninstall-plugin", "Uninstall Plugins"],
   ["remove-link", "Remove links"],
   ["move-to-trash", "Move to trash"],
+  ["remove-mcp-server", "Remove Standalone MCP Servers"],
 ];
 
 export function confirmHeading(count: number, dryRun: boolean): ReactNode {
@@ -51,14 +52,17 @@ export function confirmLines(plan: PlannedAction[]): ScreenLine[] {
   }
   lines.push({ key: "undo gap", content: "" }, { key: "undo", content: <Text dimColor bold>Undo</Text> });
   for (const [kind] of ACTION_GROUPS) {
-    for (const action of plan.filter((planned) => planned.kind === kind)) {
+    const actions = plan.filter((planned) => planned.kind === kind);
+    for (const action of actions) {
       const { undo } = actionText(action);
       lines.push({
-        key: `undo ${action.name}`,
+        key: `undo ${kind} ${action.name}`,
         wrap: "truncate-middle",
         content: <Text dimColor>{`  ${kind === "move-to-trash" ? `${action.name}: ${undo}` : undo}`}</Text>,
       });
     }
+    const note = UNDO_NOTES[kind];
+    if (note && actions.length > 0) lines.push({ key: `undo ${kind} note`, content: <Text dimColor>{`  ${note}`}</Text> });
   }
   return lines;
 }

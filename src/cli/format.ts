@@ -7,6 +7,7 @@ export const SOURCE_LABELS: Record<keyof DataSources, string> = {
   pluginFiles: "Plugin files",
   transcripts: "Transcripts",
   skillUsageCounter: "Skill usage counter",
+  mcpServerRegistrations: "MCP server registrations",
 };
 
 export const USAGE_STATUS_LABELS: Record<UsageStatus, string> = {
@@ -17,6 +18,7 @@ export const USAGE_STATUS_LABELS: Record<UsageStatus, string> = {
 
 export function kindLabel(installation: Installation): string {
   if (installation.kind === "plugin") return "Plugin";
+  if (installation.kind === "standalone-mcp-server") return "Standalone MCP Server";
   if (installation.linked) return "Linked Skill";
   if (installation.synced) return "Synced Skill";
   return "Standalone Skill";
@@ -27,6 +29,7 @@ export function installNote(installation: Installation): string {
     if (installation.enabled === "unknown") return "may be disabled";
     return installation.enabled ? "" : "disabled";
   }
+  if (installation.kind === "standalone-mcp-server") return installation.transport;
   if (installation.linked) {
     return `${installation.linked.broken ? "broken link" : "links"} to ${installation.linked.target}`;
   }

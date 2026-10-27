@@ -31,6 +31,7 @@ import { formatPeriodLine } from "./text.js";
 export interface AppProps {
   report: Report;
   configDir: string;
+  backupDir: string;
   now: Date;
   dryRun: boolean;
   cleanup: (selection: Installation[]) => Promise<CleanupOutcome[]>;
@@ -67,7 +68,7 @@ const SUMMARY_KEYS: Keys = [
   ["q", "quit"],
 ];
 
-export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
+export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppProps) {
   const installations = useMemo(() => groupedByUsageStatus(report.installations), [report]);
   const { exit } = useApp();
   const { columns, rows } = useWindowSize();
@@ -75,7 +76,7 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const { screen, pageTop, selection } = state;
   const listTop = useRef(0);
 
-  const selected = installations.filter((installation) => selection.has(installation.name));
+  const selected = installations.filter((installation) => selection.has(idOf(installation)));
 
   const header: Line[] = [
     {
@@ -94,7 +95,7 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
     void cleanup(selected).then((outcomes) => dispatch({ type: "finished", outcomes }));
   }, [screen]);
 
-  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir }), {
+  const body = bodyOf(state, installations, () => planCleanup(selected, { configDir, backupDir }), {
     dryRun,
     now,
     columns,
@@ -103,10 +104,10 @@ export function App({ report, configDir, now, dryRun, cleanup }: AppProps) {
   const footer = footerOf(state, dryRun);
 
   const fixedHeight = header.length + body.header.length + footer.length;
-  const detailContext = { periodStart: report.period.start, configDir };
+  const detailContext = { periodStart: report.period.start, configDir, backupDir };
   const panelHeight = useMemo(
     () => Math.max(0, ...installations.map((installation) => detailLines(installation, detailContext).length)) + 2,
-    [installations, configDir],
+    [installations, configDir, backupDir],
   );
   const current =
     screen === "list" ? installations[listRowsOf(installations, state.expanded)[state.cursor]?.index ?? -1] : undefined;
@@ -262,7 +263,7 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
         return {
           ...state,
           needsSelection: false,
-          selection: withName(state.selection, current.name, !state.selection.has(current.name)),
+          selection: withName(state.selection, idOf(current), !state.selection.has(idOf(current))),
         };
       case "select-recommended":
         return {
@@ -270,7 +271,7 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
           needsSelection: false,
           selection: new Set([
             ...state.selection,
-            ...installations.filter((i) => i.recommended).map((i) => i.name),
+            ...installations.filter((i) => i.recommended).map(idOf),
           ]),
         };
       case "review":
@@ -283,6 +284,10 @@ function reducerFor(installations: Installation[], dryRun: boolean) {
         return state;
     }
   };
+}
+
+function idOf(installation: Installation): string {
+  return `${installation.kind} ${installation.name}`;
 }
 
 function withName(names: ReadonlySet<string>, name: string, present: boolean): ReadonlySet<string> {
@@ -344,10 +349,10 @@ function listLines(
       });
     } else {
       lines.push({
-        key: installation.name,
+        key: idOf(installation),
         content: installationLine(installation, {
           onCursor,
-          selected: selection.has(installation.name),
+          selected: selection.has(idOf(installation)),
           columns,
           now,
         }),

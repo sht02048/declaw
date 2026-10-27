@@ -1,8 +1,15 @@
-import { chmod, mkdir, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { report, type ReportOptions } from "../../src/engine/index.js";
-import { fakeConfigDir, hookRun, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
+import {
+  fakeConfigDir,
+  hookRun,
+  mcpToolCall,
+  SECRET_MCP_SERVERS,
+  skillToolCall,
+  userPrompt,
+} from "../support/fake-config-dir.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
 const installedAt = new Date("2026-09-01T00:00:00.000Z");
@@ -96,6 +103,7 @@ describe("report: Standalone Skill Usage Stats", () => {
         pluginFiles: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
+        mcpServerRegistrations: { status: "readable" },
       },
       installations: [
         {
@@ -129,6 +137,169 @@ describe("report: Standalone Skill Usage Stats", () => {
       start: new Date("2026-09-28T07:15:00.000Z"),
       end: now,
     });
+  });
+});
+
+describe("report: Standalone MCP Server Usage Stats", () => {
+  it("counts every call to a User Scope server's tools as a Use of that server", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__context7__resolve-library-id", "2026-10-08T09:00:00.000Z"),
+      mcpToolCall("mcp__context7__query-docs", "2026-10-09T10:30:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-mcp-server",
+        name: "context7",
+        transport: "http",
+        installedAt: null,
+        usageStatus: "used",
+        recommended: false,
+        uses: 2,
+        lastUse: new Date("2026-10-09T10:30:00.000Z"),
+      },
+    ]);
+  });
+
+  it("counts calls made inside subagents", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("gbrain", { command: "gbrain", args: ["serve"] });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__gbrain__search", "2026-10-08T09:00:00.000Z"),
+    ]);
+    await config.subagentTranscript({ project: "/work/app", session: "s1", agentId: "a1" }, [
+      mcpToolCall("mcp__gbrain__query", "2026-10-08T09:05:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "gbrain", uses: 2, lastUse: new Date("2026-10-08T09:05:00.000Z") },
+    ]);
+  });
+
+  it("matches a server name with spaces or dots to its tool calls the way Claude Code names them", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("my.docs server", { type: "sse", url: "https://docs.example.com/sse" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__my_docs_server__search", "2026-10-08T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([{ name: "my.docs server", transport: "sse", uses: 1 }]);
+  });
+
+  it("keeps counting a Plugin's MCP tool calls for the Plugin when a server's name looks like its prefix", async () => {
+    const config = await fakeConfigDir();
+    await config.plugin("kit@market", { mcpServers: { db: { command: "db" } } });
+    await config.mcpServer("plugin_kit_db", { command: "lookalike" });
+    await config.mcpServer("plugin_kit", { command: "shorter" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__plugin_kit_db__query", "2026-10-08T09:00:00.000Z"),
+      mcpToolCall("mcp__plugin_kit__ping", "2026-10-09T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    const uses = Object.fromEntries(result.installations.map((installation) => [installation.name, installation.uses]));
+    expect(uses).toEqual({ "kit@market": 1, plugin_kit_db: 0, plugin_kit: 1 });
+  });
+
+  it("ignores calls to servers not registered in User Scope", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__context7__query-docs", "2026-10-08T09:00:00.000Z"),
+      mcpToolCall("mcp__project-only__run", "2026-10-08T09:01:00.000Z"),
+      mcpToolCall("mcp__claude_ai_Gmail__search", "2026-10-08T09:02:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([{ name: "context7", uses: 1 }]);
+  });
+
+  it("carries only each server's name and transport from its registration", async () => {
+    const config = await fakeConfigDir();
+    for (const [name, registration] of Object.entries(SECRET_MCP_SERVERS)) await config.mcpServer(name, registration);
+
+    const serialised = JSON.stringify(await report({ ...config.paths, now }));
+
+    expect(JSON.parse(serialised).installations).toEqual([
+      expect.objectContaining({ name: "local-secret", transport: "stdio" }),
+      expect.objectContaining({ name: "secret", transport: "http" }),
+    ]);
+    for (const setting of ["url", "headers", "command", "args", "env"]) expect(serialised).not.toContain(`"${setting}":`);
+    expect(serialised).not.toMatch(/fake-(token|header-token|command|arg|env-token)|FAKE_ENV_TOKEN|fake\.example\.com/);
+  });
+
+  it("lists only User Scope servers, never those registered for one project", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    const file = JSON.parse(await readFile(config.configFile, "utf8"));
+    file.projects = { "/work/app": { mcpServers: { "project-only": { command: "local" } } } };
+    await writeFile(config.configFile, JSON.stringify(file));
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations.map((installation) => installation.name)).toEqual(["context7"]);
+  });
+
+  it("treats a registration without a transport as stdio", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    await config.mcpServer("typed", { type: "stdio", command: "typed-mcp" });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "pencil", transport: "stdio" },
+      { name: "typed", transport: "stdio" },
+    ]);
+  });
+
+  it("marks a server with no Use in the period Unused and recommended, first among Unused Installations", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("old-skill", { createdAt: "2026-01-01T00:00:00.000Z" });
+    await config.mcpServer("idle-server", { command: "idle" });
+    await config.mcpServer("busy-server", { command: "busy" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      mcpToolCall("mcp__busy-server__work", "2026-10-08T09:00:00.000Z"),
+    ]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toEqual([
+      {
+        kind: "standalone-mcp-server",
+        name: "idle-server",
+        transport: "stdio",
+        installedAt: null,
+        usageStatus: "unused",
+        recommended: true,
+        uses: 0,
+        lastUse: null,
+      },
+      expect.objectContaining({ name: "old-skill", usageStatus: "unused" }),
+      expect.objectContaining({ name: "busy-server", usageStatus: "used", recommended: false }),
+    ]);
+  });
+
+  it("marks a server Unknown, never Unused, when the transcripts cannot be read", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await writeFile(join(config.path, "projects"), "not a directory");
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([
+      { name: "context7", usageStatus: "unknown", recommended: false, uses: "unknown", lastUse: "unknown" },
+    ]);
   });
 });
 
@@ -437,7 +608,59 @@ describe("report: read status of each data source", () => {
       pluginFiles: { status: "readable" },
       transcripts: { status: "readable" },
       skillUsageCounter: { status: "readable" },
+      mcpServerRegistrations: { status: "readable" },
     });
+  });
+
+  it("lists no Standalone MCP Server and marks the registrations unreadable when the config file is corrupt", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.corruptConfigFile();
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.mcpServerRegistrations).toEqual({
+      status: "unreadable",
+      reason: "config file is not valid JSON",
+    });
+    expect(result.installations).toEqual([]);
+  });
+
+  it("marks the registrations unreadable when mcpServers is not an object", async () => {
+    const config = await fakeConfigDir();
+    await config.rawMcpServers(["context7"]);
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.mcpServerRegistrations).toEqual({
+      status: "unreadable",
+      reason: "mcpServers in config file is not an object",
+    });
+    expect(result.installations).toEqual([]);
+  });
+
+  it("skips a malformed server registration and marks the registrations partially readable", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.mcpServer("not-an-object", "npx some-server");
+    await config.mcpServer("odd-transport", { type: "carrier-pigeon", url: "https://example.com" });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.sources.mcpServerRegistrations).toEqual({
+      status: "partial",
+      reason: "2 malformed MCP server registrations skipped",
+    });
+    expect(result.installations.map((installation) => installation.name)).toEqual(["context7"]);
+  });
+
+  it("reads the registrations from the config file inside CLAUDE_CONFIG_DIR when given that one", async () => {
+    const config = await fakeConfigDir({ configFileInConfigDir: true });
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+
+    const result = await report({ ...config.paths, now });
+
+    expect(result.installations).toMatchObject([{ name: "context7" }]);
   });
 
   it("skips a transcript line that cannot be parsed and marks transcripts partially readable", async () => {

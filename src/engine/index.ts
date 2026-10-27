@@ -1,6 +1,7 @@
 import { plural } from "../plural.js";
 import { UsageTallies, type UsageTally } from "./usage-tallies.js";
 import { findStandaloneSkills } from "./inventory.js";
+import { readMcpServers, type McpTransport } from "./mcp-servers.js";
 import { findPlugins, type ComponentKind, type PluginRecord } from "./plugins.js";
 import { partiallyReadable, readable, unreadable, type ReadStatus, type Unknown } from "./read-status.js";
 import { lastUseOf, later, readSkillUsageCounter } from "./skill-usage.js";
@@ -64,7 +65,18 @@ export interface Plugin {
   components: Component[];
 }
 
-export type Installation = Plugin | StandaloneSkill;
+export interface StandaloneMcpServer {
+  kind: "standalone-mcp-server";
+  name: string;
+  transport: McpTransport;
+  installedAt: null;
+  usageStatus: UsageStatus;
+  recommended: boolean;
+  uses: number | Unknown;
+  lastUse: Date | null | Unknown;
+}
+
+export type Installation = Plugin | StandaloneSkill | StandaloneMcpServer;
 
 export interface DataSources {
   installRecords: ReadStatus;
@@ -72,6 +84,7 @@ export interface DataSources {
   pluginFiles: ReadStatus;
   transcripts: ReadStatus;
   skillUsageCounter: ReadStatus;
+  mcpServerRegistrations: ReadStatus;
 }
 
 export interface Report {
@@ -91,7 +104,8 @@ export async function report({
 }: ReportOptions): Promise<Report> {
   const { installRecords, settings, pluginFiles, plugins } = await findPlugins(configDir);
   const skills = await findStandaloneSkills(configDir);
-  const transcripts = await readTranscriptUsage(configDir, new UsageTallies(plugins, skills));
+  const mcpServers = await readMcpServers(configFile);
+  const transcripts = await readTranscriptUsage(configDir, new UsageTallies(plugins, skills, mcpServers.servers));
   const counter = await readSkillUsageCounter(configFile);
 
   const usageOf = (inPeriod: UsageTally | null, counterKey: string | null): Usage => {
@@ -109,6 +123,7 @@ export async function report({
       pluginFiles,
       transcripts: transcripts.status,
       skillUsageCounter: counter.status,
+      mcpServerRegistrations: mcpServers.status,
     },
     installations: sortForCleanup<Installation>([
       ...plugins.map((plugin) =>
@@ -123,6 +138,15 @@ export async function report({
             ...(skill.linked && { linked: skill.linked }),
             ...(skill.synced && { synced: skill.synced }),
           }),
+      ),
+      ...mcpServers.servers.map((server) =>
+        withUsageStatus({
+          kind: "standalone-mcp-server" as const,
+          name: server.name,
+          transport: server.transport,
+          installedAt: null,
+          ...usageOf(transcripts.tallies?.mcpServer(server.name) ?? null, null),
+        }),
       ),
     ]),
   };

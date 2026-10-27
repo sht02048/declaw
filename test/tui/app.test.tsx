@@ -1,9 +1,10 @@
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { cleanup, report, type CleanupOutcome, type Installation } from "../../src/engine/index.js";
 import { App } from "../../src/tui/app.js";
-import { fakeConfigDir, skillToolCall, userPrompt } from "../support/fake-config-dir.js";
+import { fakeConfigDir, mcpToolCall, skillToolCall, userPrompt, type FakeConfigDir } from "../support/fake-config-dir.js";
 import { fakeClaude, fakeTrash } from "../support/fake-effects.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
@@ -26,7 +27,7 @@ describe("TUI", () => {
   it("renders the list of Installations under the covered period", async () => {
     const { config, result } = await exampleReport();
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const frame = lastFrame()!;
     expect(frame.split("\n")[0]).toBe(TITLE);
@@ -40,14 +41,14 @@ describe("TUI", () => {
     await config.corruptInstallRecords();
     const result = await report({ ...config.paths, now });
 
-    const { lastFrame } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     expect(lastFrame()).toMatch(/Install records: unreadable \(.+\)/);
   });
 
   it("selects the recommended set in one step", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r");
 
@@ -56,7 +57,7 @@ describe("TUI", () => {
 
   it("toggles the Installation under the cursor", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, DOWN, " ", DOWN, " ");
 
@@ -65,7 +66,7 @@ describe("TUI", () => {
 
   it("shows a Synced Skill but never selects it", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, " ");
 
@@ -77,7 +78,7 @@ describe("TUI", () => {
 
   it("expands a Plugin to show Uses per Component, and collapses it again", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, DOWN, DOWN, DOWN, RIGHT);
 
@@ -106,7 +107,7 @@ describe("TUI hook counts", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     const row = (name: string) => lastFrame()!.split("\n").find((line) => line.includes(name));
     expect(row("hooked@market")).toMatch(/\s2$/);
@@ -127,7 +128,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -150,7 +151,7 @@ describe("TUI in a short terminal", () => {
       skillToolCall("big:a", "2026-10-09T10:30:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 12 });
     stdout.emit("resize");
 
@@ -174,7 +175,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -195,7 +196,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     let rows = 16;
     Object.defineProperty(stdout, "rows", { get: () => rows });
     stdout.emit("resize");
@@ -218,7 +219,7 @@ describe("TUI in a short terminal", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     Object.defineProperty(stdout, "rows", { value: 16 });
     stdout.emit("resize");
 
@@ -247,7 +248,7 @@ async function cleanupReport() {
 describe("TUI confirmation screen", () => {
   it("groups the selected Installations by planned action under a heading, then lists how to undo each", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
@@ -273,7 +274,7 @@ describe("TUI confirmation screen", () => {
 
   it("reviews a selection made in the same burst of keys", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, `r${ENTER}`);
 
@@ -282,7 +283,7 @@ describe("TUI confirmation screen", () => {
 
   it("asks for a selection when reviewing with nothing selected", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, ENTER);
 
@@ -292,7 +293,7 @@ describe("TUI confirmation screen", () => {
 
   it("goes back to the list with the selection unchanged", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", DOWN, " ", ENTER, ESCAPE);
 
@@ -301,7 +302,7 @@ describe("TUI confirmation screen", () => {
 
   it("offers no way past the confirmation screen in a dry run", async () => {
     const { config, result } = await cleanupReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     await press(stdin, "r", ENTER, ENTER, "y");
 
@@ -317,8 +318,8 @@ describe("TUI Cleanup", () => {
     const { config, result } = await cleanupReport();
     const trash = fakeTrash(join(config.home, ".Trash"));
     const run = (selection: Installation[]) =>
-      cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+      cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER);
@@ -354,8 +355,8 @@ describe("TUI Cleanup", () => {
     const folder = join(config.path, "skills", "ux-writing");
     const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
     const run = (selection: Installation[]) =>
-      cleanup(selection, { configDir: config.path, trash: trash.move, runClaude: fakeClaude().run });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun={false} cleanup={run} />);
+      cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
     resize(stdout, { columns: 240, rows: 40 });
 
     await press(stdin, "r", ENTER, "y");
@@ -373,7 +374,7 @@ describe("TUI Cleanup", () => {
 describe("TUI groups", () => {
   it("counts Installations per Usage Status, the recommended ones, and the selected ones", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
 
     expect(lastFrame()!.split("\n")[1]).toMatch(/^3 Unused {2}1 Used · 2 recommended\s+0 selected$/);
 
@@ -384,7 +385,7 @@ describe("TUI groups", () => {
 
   it("lists Installations under a header per Usage Status that the cursor skips", async () => {
     const { config, result } = await exampleReport();
-    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     const lines = () => lastFrame()!.split("\n");
 
     expect(lines().map((line) => line.trim())).toEqual(expect.arrayContaining(["Unused  3", "Used  1"]));
@@ -407,7 +408,7 @@ describe("TUI detail panel", () => {
       userPrompt("hello", "2026-09-28T07:15:00.000Z"),
     ]);
     const result = await report({ ...config.paths, now });
-    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
     resize(stdout, { columns: 200, rows: 40 });
     await settle();
     const withCursorOn = async (name: string) => {
@@ -427,6 +428,139 @@ describe("TUI detail panel", () => {
   });
 });
 
+async function mcpReport() {
+  const config = await fakeConfigDir();
+  await config.plugin("idle@market", { skills: ["nap"] });
+  await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp?token=fake-token" });
+  await config.mcpServer("pencil", { command: "pencil-mcp", env: { PENCIL_KEY: "fake-key" } });
+  await config.transcript({ project: "/work/app", session: "s1" }, [
+    userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    mcpToolCall("mcp__context7__query-docs", "2026-10-09T10:30:00.000Z"),
+  ]);
+  return { config, result: await report({ ...config.paths, now }) };
+}
+
+describe("TUI Standalone MCP Servers", () => {
+  it("lists each server as an mcp row with an empty hooks cell", async () => {
+    const { config, result } = await mcpReport();
+    const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 120, rows: 40 });
+    await settle();
+
+    const row = (name: string) => plain(lastFrame()!).split("\n").find((line) => line.includes(name));
+    expect(row("pencil")).toMatch(/★ pencil\s+mcp\s+0\s+never$/);
+    expect(row("context7")).toMatch(/ context7\s+mcp\s+1\s+2w ago$/);
+    expect(row("idle@market")).toMatch(/plugin\s+0\s+never\s+0$/);
+    expect(lastFrame()).not.toContain("fake-token");
+    expect(lastFrame()).not.toContain("fake-key");
+  });
+
+  it("describes the server under the cursor: transport, what is known, and what a Cleanup would do", async () => {
+    const { config, result } = await mcpReport();
+    const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 240, rows: 40 });
+    await settle();
+
+    expect(cursorLine(lastFrame()!)).toContain("pencil");
+    const panel = unwrapped(plain(lastFrame()!));
+    expect(panel).toContain("pencil Standalone MCP Server · stdio ★ recommended for Cleanup");
+    expect(panel).toContain("Unused No Use since 2026-09-28");
+    expect(panel).toContain("Connects over stdio · no install time recorded");
+    expect(panel).toContain("Only Uses in the covered period are known");
+    expect(panel).toContain(
+      `Cleanup: Back up to ${join(backupDirOf(config), "pencil.json")}, then remove with claude mcp remove pencil --scope user`,
+    );
+  });
+
+  it("groups selected servers on the confirmation screen with the remove command, backup file, and undo command", async () => {
+    const { config, result } = await mcpReport();
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={unexpectedCleanup} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, "r", ENTER);
+
+    const backupPath = join(backupDirOf(config), "pencil.json");
+    const lines = lastFrame()!.split("\n").map((line) => line.trim());
+    expect(lines[lines.indexOf("Remove Standalone MCP Servers (1)") + 1]).toBe(
+      `pencil  Back up to ${backupPath}, then remove with claude mcp remove pencil --scope user`,
+    );
+    expect(lines.slice(lines.indexOf("Undo") + 1, lines.indexOf("Undo") + 4)).toEqual([
+      "claude plugin install idle@market --scope user",
+      `claude mcp add-json pencil "$(cat '${backupPath}')" --scope user`,
+      "A server that signs in with OAuth needs a new login in /mcp after it is added back.",
+    ]);
+  });
+
+  it("backs up and removes a server on y, then shows how to add it back", async () => {
+    const { config, result } = await mcpReport();
+    const claude = fakeClaude();
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { ...cleanupPaths(config), trash: fakeTrash(join(config.home, ".Trash")).move, runClaude: claude.run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, " ", ENTER, "y");
+    await settle();
+
+    const backupPath = join(backupDirOf(config), "pencil.json");
+    expect(lastFrame()).toContain(
+      [
+        "✔ removed  pencil",
+        "",
+        "To add back a removed Standalone MCP Server from its backup:",
+        `  claude mcp add-json pencil "$(cat '${backupPath}')" --scope user`,
+        "A server that signs in with OAuth needs a new login in /mcp after it is added back.",
+      ].join("\n"),
+    );
+    expect(claude.calls).toEqual([["mcp", "remove", "pencil", "--scope", "user"]]);
+    expect(JSON.parse(await readFile(backupPath, "utf8"))).toEqual({ command: "pencil-mcp", env: { PENCIL_KEY: "fake-key" } });
+  });
+
+  it("keeps a server and a Standalone Skill of the same name apart when selecting and removing", async () => {
+    const config = await fakeConfigDir();
+    await config.standaloneSkill("pencil");
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    await config.transcript({ project: "/work/app", session: "s1" }, [
+      userPrompt("hello", "2026-09-28T07:15:00.000Z"),
+    ]);
+    const result = await report({ ...config.paths, now });
+    const trash = fakeTrash(join(config.home, ".Trash"));
+    const claude = fakeClaude();
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: claude.run });
+    const { lastFrame, stdin, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, " ");
+    const rows = plain(lastFrame()!).split("\n").filter((line) => /^[›\s] [○◉] ★ pencil\s/.test(line));
+    expect(rows.map((line) => [line.includes("◉"), /\smcp\s/.test(line)])).toEqual([
+      [true, true],
+      [false, false],
+    ]);
+    await press(stdin, ENTER, "y");
+    await settle();
+
+    expect(lastFrame()).toContain("Cleanup of 1 Installation: 1 removed, 0 failed");
+    expect(claude.calls).toEqual([["mcp", "remove", "pencil", "--scope", "user"]]);
+    expect(trash.moves).toEqual([]);
+  });
+
+  it("writes no backup in a dry run", async () => {
+    const { config, result } = await mcpReport();
+    const claude = fakeClaude();
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { ...cleanupPaths(config), trash: fakeTrash(join(config.home, ".Trash")).move, runClaude: claude.run });
+    const { lastFrame, stdin } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={run} />);
+
+    await press(stdin, "r", ENTER, "y");
+    await settle();
+
+    expect(lastFrame()).toContain("Dry run: nothing will be changed");
+    expect(claude.calls).toEqual([]);
+    await expect(readdir(join(config.home, ".declaw"))).rejects.toThrow();
+  });
+});
+
 describe("TUI layout", () => {
   it("keeps every line on one terminal row, truncating long names with an ellipsis", async () => {
     const config = await fakeConfigDir();
@@ -440,7 +574,7 @@ describe("TUI layout", () => {
     const result = await report({ ...config.paths, now });
 
     for (const columns of [100, 60]) {
-      const { lastFrame, stdout } = render(<App report={result} configDir={config.path} now={now} dryRun cleanup={unexpectedCleanup} />);
+      const { lastFrame, stdout } = render(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun cleanup={unexpectedCleanup} />);
       resize(stdout, { columns, rows: 40 });
       await settle();
 
@@ -450,6 +584,14 @@ describe("TUI layout", () => {
     }
   });
 });
+
+function backupDirOf(config: FakeConfigDir): string {
+  return join(config.home, ".declaw", "backups", "2026-10-26T00-00-00Z");
+}
+
+function cleanupPaths(config: FakeConfigDir) {
+  return { ...config.paths, backupDir: backupDirOf(config) };
+}
 
 const unexpectedCleanup = async (): Promise<CleanupOutcome[]> => {
   throw new Error("cleanup must not run");
