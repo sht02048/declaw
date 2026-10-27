@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/mascot.svg" width="160" alt="declaw mascot, a small teal pixel crab"></p>
+
 # declaw
 
 See which Claude Code plugins, skills, and MCP servers you actually use, so you can remove the ones you don't.
