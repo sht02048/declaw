@@ -114,4 +114,22 @@ describe("planCleanup", () => {
       }),
     ]);
   });
+
+  it("gives servers whose backup file names would clash, even only by case, distinct backup paths", async () => {
+    const config = await fakeConfigDir();
+    for (const name of ["my/docs", "my_docs", "My_Docs", "my_docs-2"]) await config.mcpServer(name, { command: "docs" });
+    const result = await report({ ...config.paths, now });
+
+    const plan = planCleanup(named(result, "my/docs", "my_docs", "My_Docs", "my_docs-2"), {
+      configDir: config.path,
+      backupDir,
+    });
+
+    expect(plan.map((action) => action.kind === "remove-mcp-server" && action.backupPath)).toEqual([
+      `${backupDir}/my_docs.json`,
+      `${backupDir}/my_docs-2.json`,
+      `${backupDir}/My_Docs-3.json`,
+      `${backupDir}/my_docs-2-2.json`,
+    ]);
+  });
 });

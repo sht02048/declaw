@@ -42,6 +42,7 @@ export function isRemovable(installation: Installation): boolean {
 }
 
 export function planCleanup(selection: Installation[], { configDir, backupDir }: PlanOptions): PlannedAction[] {
+  const backupFiles = new Set<string>();
   return selection.filter(isRemovable).map((installation): PlannedAction => {
     if (installation.kind === "plugin") {
       return {
@@ -52,7 +53,7 @@ export function planCleanup(selection: Installation[], { configDir, backupDir }:
       };
     }
     if (installation.kind === "standalone-mcp-server") {
-      const backupPath = join(backupDir, `${installation.name.replace(/[^A-Za-z0-9._-]/g, "_")}.json`);
+      const backupPath = join(backupDir, uniqueBackupFile(installation.name, backupFiles));
       const name = /^[A-Za-z0-9._-]+$/.test(installation.name) ? installation.name : shellQuote(installation.name);
       return {
         kind: "remove-mcp-server",
@@ -75,6 +76,14 @@ export function planCleanup(selection: Installation[], { configDir, backupDir }:
     }
     return { kind: "move-to-trash", name: installation.name, path };
   });
+}
+
+function uniqueBackupFile(name: string, taken: Set<string>): string {
+  const safe = name.replace(/[^A-Za-z0-9._-]/g, "_");
+  let file = `${safe}.json`;
+  for (let suffix = 2; taken.has(file.toLowerCase()); suffix += 1) file = `${safe}-${suffix}.json`;
+  taken.add(file.toLowerCase());
+  return file;
 }
 
 function shellQuote(value: string): string {
