@@ -71,7 +71,8 @@ const CONFIRM_KEYS: Keys = [
 ];
 const SUMMARY_KEYS: Keys = [
   ["↑↓", "scroll"],
-  ["esc", "quit"],
+  ["esc", "back"],
+  ["q", "quit"],
 ];
 
 export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppProps) {
@@ -81,7 +82,8 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
   const { columns, rows } = useWindowSize();
   const [state, dispatch] = useReducer(reducerFor(installations, tabs, dryRun), INITIAL_STATE);
   const { screen, pageTop, selection } = state;
-  const shownInstallations = installations.filter(tabs[state.tab]!.includes);
+  const remaining = installations.filter((installation) => !state.removed.has(idOf(installation)));
+  const shownInstallations = remaining.filter(tabs[state.tab]!.includes);
   const listTop = useRef(0);
 
   const selected = installations.filter((installation) => selection.has(idOf(installation)));
@@ -100,14 +102,21 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
 
   useEffect(() => {
     if (screen !== "running") return;
-    void cleanup(selected).then((outcomes) => dispatch({ type: "finished", outcomes }));
+    const removable = selected.filter(isRemovable);
+    void cleanup(selected).then((outcomes) =>
+      dispatch({
+        type: "finished",
+        outcomes,
+        removed: removable.filter((_, index) => outcomes[index]?.result === "removed").map(idOf),
+      }),
+    );
   }, [screen]);
 
   const body = bodyOf(state, shownInstallations, () => planCleanup(selected, { configDir, backupDir }), {
     dryRun,
     now,
     table: columnsFor(installations, now, columns),
-    tabs: tabBar(tabs, state.tab, installations),
+    tabs: tabBar(tabs, state.tab, remaining),
     problems: formatSources(report.sources, { problemsOnly: true }),
   });
   const footer = footerOf(state, dryRun);
@@ -138,8 +147,8 @@ export function App({ report, configDir, backupDir, now, dryRun, cleanup }: AppP
 
   useInput((input, key) => {
     if (key.escape) {
-      if (screen === "confirm") dispatch({ type: "back" });
-      else if (screen !== "running") exit();
+      if (screen === "list") exit();
+      else dispatch({ type: "back" });
     } else if (key.upArrow) dispatch({ type: "up", lastPageTop: lastTop(heights, room) });
     else if (key.downArrow) dispatch({ type: "down", lastPageTop: lastTop(heights, room) });
     else if (key.rightArrow) dispatch({ type: "tab", step: 1 });
@@ -214,6 +223,7 @@ interface State {
   needsSelection: boolean;
   selection: ReadonlySet<string>;
   expanded: ReadonlySet<string>;
+  removed: ReadonlySet<string>;
 }
 
 type Action =
@@ -225,7 +235,7 @@ type Action =
   | { type: "select-recommended" }
   | { type: "review" }
   | { type: "proceed" }
-  | { type: "finished"; outcomes: CleanupOutcome[] }
+  | { type: "finished"; outcomes: CleanupOutcome[]; removed: string[] }
   | { type: "back" };
 
 const INITIAL_STATE: State = {
@@ -237,19 +247,28 @@ const INITIAL_STATE: State = {
   needsSelection: false,
   selection: new Set(),
   expanded: new Set(),
+  removed: new Set(),
 };
 
 function reducerFor(allInstallations: Installation[], tabs: KindTab[], dryRun: boolean) {
   return (state: State, action: Action): State => {
     if (state.screen === "running") {
       return action.type === "finished"
-        ? { ...state, screen: "summary", pageTop: 0, outcomes: action.outcomes }
+        ? {
+            ...state,
+            screen: "summary",
+            pageTop: 0,
+            outcomes: action.outcomes,
+            removed: new Set([...state.removed, ...action.removed]),
+          }
         : state;
     }
     if (state.screen === "confirm" || state.screen === "summary") {
       switch (action.type) {
         case "back":
-          return state.screen === "confirm" ? { ...state, screen: "list" } : state;
+          return state.screen === "confirm"
+            ? { ...state, screen: "list" }
+            : { ...state, screen: "list", cursor: 0, selection: new Set() };
         case "proceed":
         case "review":
           return state.screen === "confirm" && !dryRun ? { ...state, screen: "running" } : state;
@@ -261,7 +280,9 @@ function reducerFor(allInstallations: Installation[], tabs: KindTab[], dryRun: b
           return state;
       }
     }
-    const installations = allInstallations.filter(tabs[state.tab]!.includes);
+    const installations = allInstallations.filter(
+      (installation) => !state.removed.has(idOf(installation)) && tabs[state.tab]!.includes(installation),
+    );
     const listRows = listRowsOf(installations, state.expanded);
     const current = installations[listRows[state.cursor]?.index ?? -1];
     switch (action.type) {

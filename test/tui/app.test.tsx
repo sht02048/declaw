@@ -370,6 +370,25 @@ describe("TUI Cleanup", () => {
     expect(lines[failed + 1]).toBe(`    could not move ${folder} to the trash`);
     expect(lastFrame()).not.toContain("Moved to the system trash");
   });
+
+  it("goes back on esc to the list without the removed Installations and with nothing selected", async () => {
+    const { config, result } = await cleanupReport();
+    const folder = join(config.path, "skills", "ux-writing");
+    const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [folder] });
+    const run = (selection: Installation[]) =>
+      cleanup(selection, { ...cleanupPaths(config), trash: trash.move, runClaude: fakeClaude().run });
+    const { lastFrame, stdin, stdout } = await renderOnAll(<App report={result} configDir={config.path} backupDir={backupDirOf(config)} now={now} dryRun={false} cleanup={run} />);
+    resize(stdout, { columns: 240, rows: 40 });
+
+    await press(stdin, "r", ENTER, ENTER);
+    await settle();
+    await press(stdin, ESCAPE);
+
+    expect(lastFrame()).toContain("ux-writing");
+    expect(lastFrame()).not.toContain("idle@market");
+    expect(lastFrame()).not.toContain("find-skills");
+    expect(lastFrame()).toMatch(/\s0 selected/);
+  });
 });
 
 describe("TUI quitting", () => {
