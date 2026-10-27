@@ -1,6 +1,6 @@
-import type { CleanupOutcome, PlannedAction } from "../engine/index.js";
+import type { CleanupOutcome } from "../engine/index.js";
 import { countOf } from "../plural.js";
-import { actionText, UNDO_HEADINGS, UNDO_NOTES } from "./actions.js";
+import { actionText, undoGroups } from "./actions.js";
 
 export function formatCleanupSummary(outcomes: CleanupOutcome[]): string {
   const removed = outcomes.filter((outcome) => outcome.result === "removed");
@@ -13,11 +13,9 @@ export function formatCleanupSummary(outcomes: CleanupOutcome[]): string {
     lines.push(`${outcome.result.padEnd(8)} ${outcome.name}`);
     if (outcome.result === "failed" && outcome.message !== "") lines.push(outcome.message.replace(/\n$/, ""));
   }
-  for (const kind of Object.keys(UNDO_HEADINGS) as PlannedAction["kind"][]) {
-    const undos = removed.flatMap(({ action }) => (action.kind === kind ? [`  ${actionText(action).undoInSummary}`] : []));
-    if (undos.length === 0) continue;
-    lines.push("", UNDO_HEADINGS[kind], ...undos);
-    if (UNDO_NOTES[kind]) lines.push(UNDO_NOTES[kind]);
+  for (const { heading, actions, note } of undoGroups(removed.map(({ action }) => action))) {
+    lines.push("", heading, ...actions.map((action) => `  ${actionText(action).undoInSummary}`));
+    if (note) lines.push(note);
   }
   return `${lines.join("\n")}\n`;
 }

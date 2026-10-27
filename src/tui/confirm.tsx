@@ -1,7 +1,7 @@
 import { Text } from "ink";
 import type { ReactNode } from "react";
 import type { PlannedAction } from "../engine/index.js";
-import { actionText, UNDO_NOTES } from "../cli/actions.js";
+import { actionText, undoGroups } from "../cli/actions.js";
 import { countOf } from "../plural.js";
 
 export interface ScreenLine {
@@ -51,8 +51,7 @@ export function confirmLines(plan: PlannedAction[]): ScreenLine[] {
     }
   }
   lines.push({ key: "undo gap", content: "" }, { key: "undo", content: <Text dimColor bold>Undo</Text> });
-  for (const [kind] of ACTION_GROUPS) {
-    const actions = plan.filter((planned) => planned.kind === kind);
+  for (const { kind, actions, note } of undoGroups(plan)) {
     for (const action of actions) {
       const { undo } = actionText(action);
       lines.push({
@@ -61,8 +60,7 @@ export function confirmLines(plan: PlannedAction[]): ScreenLine[] {
         content: <Text dimColor>{`  ${kind === "move-to-trash" ? `${action.name}: ${undo}` : undo}`}</Text>,
       });
     }
-    const note = UNDO_NOTES[kind];
-    if (note && actions.length > 0) lines.push({ key: `undo ${kind} note`, content: <Text dimColor>{`  ${note}`}</Text> });
+    if (note) lines.push({ key: `undo ${kind} note`, content: <Text dimColor>{`  ${note}`}</Text> });
   }
   return lines;
 }
