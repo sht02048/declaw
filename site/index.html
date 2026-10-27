@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>declaw</title>
+<meta name="description" content="See which Claude Code plugins, skills, and MCP servers you actually use, and remove the rest with a way back for each.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;600&family=Schibsted+Grotesk:wght@400;500;600&display=swap">
+<style>
+html { -webkit-text-size-adjust: 100%; }
+/* Layout: one left-aligned reading column; the live terminal breaks out wider as the hero. */
+:root {
+  --paper: #f2f4f6;
+  --ink: #15181d;
+  --muted: #59626e;
+  --rule: #d6dbe1;
+  --accent: #0b737c;
+  --star: #9a6c00;
+  --chip: #e4e8ec;
+  --term-bg: #121519;
+  --term-fg: #d6dbe1;
+  --term-dim: #7a838f;
+  --term-rule: #2b3139;
+  --term-bright: #ffffff;
+  --term-hover: rgba(255, 255, 255, 0.04);
+  --term-thumb: rgba(255, 255, 255, 0.2);
+  --focus: #6b7480;
+  --t-yellow: #e3b341;
+  --t-green: #62c27a;
+  --t-cyan: #4fc3cf;
+  --t-magenta: #c87ddf;
+  --t-blue: #6fa3f2;
+  --t-red: #ef6f6f;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1215;
+    --ink: #e5e8ec;
+    --muted: #98a1ac;
+    --rule: #262b32;
+    --accent: #4fc3cf;
+    --star: #e3b341;
+    --chip: #1b2026;
+    --term-bg: #090b0e;
+    --term-rule: #232930;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1215;
+  --ink: #e5e8ec;
+  --muted: #98a1ac;
+  --rule: #262b32;
+  --accent: #4fc3cf;
+  --star: #e3b341;
+  --chip: #1b2026;
+  --term-bg: #090b0e;
+  --term-rule: #232930;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 96px;
+  display: grid;
+  gap: 40px;
+}
+.prose { max-width: 640px; min-width: 0; }
+
+header.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.mascot { display: block; flex-shrink: 0; pointer-events: none; user-select: none; }
+.wordmark {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+}
+.wordmark .cursor { color: var(--accent); }
+
+h1, h2 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+h1 {
+  font-size: clamp(2.3rem, 6vw, 4rem);
+  line-height: 1.08;
+  font-weight: 700;
+  max-width: 16ch;
+}
+h1 .quiet { color: var(--muted); font-weight: 500; }
+h2 {
+  font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+  line-height: 1.1;
+  font-weight: 700;
+}
+p { margin: 0; }
+.lede {
+  font-size: 19px;
+  color: var(--muted);
+  max-width: 34em;
+}
+.page, .hero { grid-template-columns: minmax(0, 1fr); }
+.hero { display: grid; gap: 56px; }
+.hero-text { display: grid; gap: 20px; }
+.hero-text .install { margin-top: 8px; }
+
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+p code, li code, td code {
+  background: var(--chip);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.install {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 6px 6px 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  max-width: 100%;
+  justify-self: start;
+}
+.install .prompt { color: var(--muted); user-select: none; }
+.copy {
+  position: relative;
+  font: 500 13px var(--font-body);
+  color: var(--ink);
+  background: var(--chip);
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 5.4em;
+  text-align: center;
+  margin-left: 10px;
+  cursor: pointer;
+  transition-property: background-color, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.copy::before {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
+}
+.copy:hover { background: var(--rule); }
+.copy:active { transform: scale(0.96); }
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.term:focus { outline: none; }
+.term-wrap:has(.term:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Terminal demo */
+.demo { display: grid; gap: 12px; min-width: 0; }
+.demo .keypad { margin-top: 4px; }
+.demo-note {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.term-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  background: var(--term-bg);
+}
+.term-wrap::-webkit-scrollbar { height: 8px; }
+.term-wrap::-webkit-scrollbar-thumb { background: var(--term-thumb); border-radius: 4px; }
+.term {
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.55;
+  padding: 24px 28px;
+  white-space: pre;
+  min-width: 72ch;
+  cursor: default;
+}
+.term .line { min-height: 1.55em; }
+.term .row { cursor: pointer; transition: background-color 150ms ease-out; }
+.term .row:hover { background: var(--term-hover); }
+.term .row.on .name { color: var(--term-bright); }
+.term .tab { cursor: pointer; transition: color 150ms ease-out; }
+.term .tab.c-dim:hover { color: var(--term-fg); }
+.c-dim { color: var(--term-dim); }
+.c-yellow { color: var(--t-yellow); }
+.c-green { color: var(--t-green); }
+.c-cyan { color: var(--t-cyan); }
+.c-magenta { color: var(--t-magenta); }
+.c-blue { color: var(--t-blue); }
+.c-red { color: var(--t-red); }
+.b { font-weight: 600; }
+.panel {
+  border: 1px solid var(--term-rule);
+  border-radius: 8px;
+  padding: 4px 12px;
+  margin-block: 8px;
+}
+.keypad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.keypad button {
+  font: 500 13px var(--font-mono);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition-property: background-color, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+@media (pointer: coarse) {
+  .keypad button { min-height: 44px; min-width: 44px; }
+}
+.keypad button span { font-family: var(--font-body); color: var(--muted); margin-left: 6px; }
+.keypad button:hover { background: var(--chip); }
+.keypad button:active { transform: scale(0.96); }
+
+@media (max-width: 520px) {
+  body { font-size: 16px; }
+  .page { gap: 32px; padding-block: 32px 72px; }
+  .hero { gap: 40px; }
+  .term { font-size: 12px; padding: 16px 18px; }
+  .install { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  .copy:active, .keypad button:active { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <span class="wordmark"><span class="cursor">›</span> declaw</span>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 12" class="mascot" width="50" height="30" aria-hidden="true" shape-rendering="crispEdges"><rect x="0" y="0" width="1" height="1" fill="#14a3ae"/><rect x="3" y="0" width="1" height="1" fill="#14a3ae"/><rect x="16" y="0" width="1" height="1" fill="#14a3ae"/><rect x="19" y="0" width="1" height="1" fill="#14a3ae"/><rect x="0" y="1" width="1" height="1" fill="#14a3ae"/><rect x="3" y="1" width="1" height="1" fill="#14a3ae"/><rect x="16" y="1" width="1" height="1" fill="#14a3ae"/><rect x="19" y="1" width="1" height="1" fill="#14a3ae"/><rect x="0" y="2" width="4" height="1" fill="#14a3ae"/><rect x="6" y="2" width="1" height="1" fill="#15181d"/><rect x="7" y="2" width="1" height="1" fill="#ffffff"/><rect x="12" y="2" width="1" height="1" fill="#15181d"/><rect x="13" y="2" width="1" height="1" fill="#ffffff"/><rect x="16" y="2" width="4" height="1" fill="#14a3ae"/><rect x="1" y="3" width="2" height="1" fill="#14a3ae"/><rect x="6" y="3" width="2" height="1" fill="#15181d"/><rect x="12" y="3" width="2" height="1" fill="#15181d"/><rect x="17" y="3" width="2" height="1" fill="#14a3ae"/><rect x="2" y="4" width="1" height="1" fill="#0e8892"/><rect x="7" y="4" width="1" height="1" fill="#0e8892"/><rect x="12" y="4" width="1" height="1" fill="#0e8892"/><rect x="17" y="4" width="1" height="1" fill="#0e8892"/><rect x="3" y="5" width="2" height="1" fill="#0e8892"/><rect x="5" y="5" width="10" height="1" fill="#1fb5c0"/><rect x="15" y="5" width="2" height="1" fill="#0e8892"/><rect x="4" y="6" width="1" height="1" fill="#1fb5c0"/><rect x="5" y="6" width="1" height="1" fill="#7fdde4"/><rect x="6" y="6" width="10" height="1" fill="#1fb5c0"/><rect x="4" y="7" width="12" height="1" fill="#1fb5c0"/><rect x="4" y="8" width="5" height="1" fill="#1fb5c0"/><rect x="9" y="8" width="2" height="1" fill="#0a4a51"/><rect x="11" y="8" width="5" height="1" fill="#1fb5c0"/><rect x="5" y="9" width="10" height="1" fill="#0b7079"/><rect x="5" y="10" width="1" height="1" fill="#0b7079"/><rect x="7" y="10" width="1" height="1" fill="#0b7079"/><rect x="12" y="10" width="1" height="1" fill="#0b7079"/><rect x="14" y="10" width="1" height="1" fill="#0b7079"/><rect x="4" y="11" width="1" height="1" fill="#0b7079"/><rect x="6" y="11" width="1" height="1" fill="#0b7079"/><rect x="13" y="11" width="1" height="1" fill="#0b7079"/><rect x="15" y="11" width="1" height="1" fill="#0b7079"/></svg>
+  </header>
+
+  <div class="hero">
+    <div class="hero-text">
+      <h1>Find the plugins you never use. <span class="quiet">Remove them with a way back.</span></h1>
+      <p class="lede">declaw reads Claude Code’s local files and shows, for every plugin, skill, and MCP server you installed, how often you used it and when you last did. Then you pick what goes.</p>
+      <div class="install">
+        <span class="prompt">$&nbsp;</span><span id="install-cmd">npx declaw</span>
+        <button class="copy" type="button" data-copy="install-cmd">Copy</button>
+      </div>
+    </div>
+
+    <div class="demo">
+      <div class="demo-note">
+        <span>Try it here. Click the terminal, then use the arrow keys, space, r, enter, and esc.</span>      </div>
+      <div class="term-wrap">
+        <div class="term" id="term" tabindex="0" role="application" aria-label="declaw demo. Left and right switch kinds, up and down move, space selects, r selects the recommended set, enter reviews, esc goes back."></div>
+      </div>
+      <div class="keypad" aria-label="Demo keys">
+        <button type="button" data-key="ArrowLeft">←<span>kind</span></button>
+        <button type="button" data-key="ArrowRight">→<span>kind</span></button>
+        <button type="button" data-key="ArrowUp">↑</button>
+        <button type="button" data-key="ArrowDown">↓</button>
+        <button type="button" data-key=" ">space<span>select</span></button>
+        <button type="button" data-key="r">r<span>recommended</span></button>
+        <button type="button" data-key="Enter">enter<span>review</span></button>
+        <button type="button" data-key="Escape">esc<span>back</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const items = [
+    { name: "pdf-tools@acme-plugins", kind: "plugin", status: "unused", uses: 0, last: "never", hooks: "0", rec: true, kindLabel: "Plugin",
+      reason: "No Use since 2026-09-28", facts: "Installed 2026-08-14 · 0 hooks run every session",
+      action: "claude plugin uninstall pdf-tools@acme-plugins --scope user", undo: "claude plugin install pdf-tools@acme-plugins --scope user" },
+    { name: "standup@acme-plugins", kind: "plugin", status: "unused", uses: 0, last: "never", hooks: "1", rec: true, kindLabel: "Plugin",
+      reason: "No Use since 2026-09-28", facts: "Installed 2026-09-02 · 1 hook runs every session",
+      action: "claude plugin uninstall standup@acme-plugins --scope user", undo: "claude plugin install standup@acme-plugins --scope user" },
+    { name: "deploy-kit@acme-plugins", kind: "plugin", status: "used", uses: 14, last: "2d ago", hooks: "2", rec: false, kindLabel: "Plugin",
+      reason: "Last used 2026-10-24, 14 Uses in the covered period", facts: "Installed 2026-07-30 · 2 hooks run every session",
+      action: "claude plugin uninstall deploy-kit@acme-plugins --scope user", undo: "claude plugin install deploy-kit@acme-plugins --scope user" },
+    { name: "ux-writing", kind: "skill", short: "skill", color: "c-blue", status: "unused", uses: 0, last: "never", rec: true, kindLabel: "Standalone Skill",
+      reason: "No Use since 2026-09-28", facts: "Installed 2026-08-21",
+      action: "move ~/.claude/skills/ux-writing to the trash", undo: "restore it from the system trash" },
+    { name: "find-skills", kind: "skill", short: "link", color: "c-cyan", status: "unused", uses: 0, last: "never", rec: true, kindLabel: "Linked Skill",
+      reason: "No Use since 2026-09-28", facts: "Links to ~/.agents/skills/find-skills",
+      action: "remove the link ~/.claude/skills/find-skills", undo: "ln -s ~/.agents/skills/find-skills ~/.claude/skills/find-skills" },
+    { name: "brand-voice", kind: "skill", short: "synced", color: "c-dim", status: "unused", uses: 0, last: "never", rec: false, removable: false, kindLabel: "Synced Skill",
+      reason: "No Use since 2026-09-28", facts: "Managed by claude.ai, cannot be removed" },
+    { name: "commit", kind: "skill", short: "skill", color: "c-blue", status: "used", uses: 31, last: "1d ago", rec: false, kindLabel: "Standalone Skill",
+      reason: "Last used 2026-10-25, 31 Uses in the covered period", facts: "Installed 2026-06-03",
+      action: "move ~/.claude/skills/commit to the trash", undo: "restore it from the system trash" },
+    { name: "design-canvas", kind: "mcp", status: "unused", uses: 0, last: "never", rec: true, kindLabel: "Standalone MCP Server · stdio",
+      reason: "No Use since 2026-09-28", facts: "no install time recorded",
+      action: "back up to ~/.declaw/backups/…/design-canvas.json, then claude mcp remove design-canvas --scope user",
+      undo: "claude mcp add-json design-canvas \"$(cat ~/.declaw/backups/…/design-canvas.json)\" --scope user" },
+    { name: "docs-search", kind: "mcp", status: "used", uses: 118, last: "3d ago", rec: false, kindLabel: "Standalone MCP Server · http",
+      reason: "Last used 2026-10-23, 118 Uses in the covered period", facts: "no install time recorded",
+      action: "back up to ~/.declaw/backups/…/docs-search.json, then claude mcp remove docs-search --scope user",
+      undo: "claude mcp add-json docs-search \"$(cat ~/.declaw/backups/…/docs-search.json)\" --scope user" },
+  ];
+  const tabs = [
+    { label: "Plugins", has: (i) => i.kind === "plugin" },
+    { label: "Skills", has: (i) => i.kind === "skill" },
+    { label: "MCP Servers", has: (i) => i.kind === "mcp" },
+    { label: "All", has: () => true },
+  ];
+  const state = { screen: "list", tab: 0, cursor: 0, selection: new Set(), removed: new Set(), lastRun: [] };
+
+  const term = document.getElementById("term");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const span = (cls, text) => `<span class="${cls}">${esc(text)}</span>`;
+  const removable = (i) => i.removable !== false;
+  const remaining = () => items.filter((i) => !state.removed.has(i.name));
+  const shown = () => {
+    const list = remaining().filter(tabs[state.tab].has);
+    return [...list.filter((i) => i.status === "unused"), ...list.filter((i) => i.status === "used")];
+  };
+  const kindOf = (i) => i.kind === "plugin" ? ["plugin", "c-magenta"] : i.kind === "mcp" ? ["mcp", "c-blue"] : [i.short, i.color];
+
+  const W = { name: 26, kind: 7, uses: 5, last: 9, hooks: 5 };
+  function rowHtml(i, onCursor, index) {
+    const [kind, color] = kindOf(i);
+    const cursor = onCursor ? span("c-cyan", "›") : " ";
+    const sel = !removable(i) ? span("c-dim", "·") : state.selection.has(i.name) ? span("c-green", "◉") : "○";
+    const star = i.rec ? span("c-yellow", "★") : " ";
+    const name = i.name.length > W.name ? i.name.slice(0, W.name - 1) + "…" : i.name;
+    return `<div class="line row${onCursor ? " on" : ""}" data-row="${index}">${cursor} ${sel} ${star} ${span("name", name.padEnd(W.name))}  ${span(color, kind.padEnd(W.kind))}  ${String(i.uses).padStart(W.uses - 1)}  ${span("c-dim", i.last.padEnd(W.last))}  ${(i.hooks ?? "").padStart(W.hooks)}</div>`;
+  }
+
+  function header() {
+    const all = remaining();
+    const tabLine = tabs
+      .filter((t, index) => index === 3 || items.some(t.has))
+      .map((t) => {
+        const index = tabs.indexOf(t);
+        const text = `${t.label} ${all.filter(t.has).length}`;
+        return `<span class="tab ${index === state.tab ? "c-cyan" : "c-dim"}" data-tab="${index}">${esc(text)}</span>`;
+      })
+      .join("  ");
+    return [
+      `<div class="line"><span class="b">declaw</span>${span("c-dim", "  Usage Stats 2026-09-28 – 2026-10-26 · 29 days")}</div>`,
+      `<div class="line">${tabLine}</div>`,
+    ];
+  }
+
+  function keys(list) {
+    return `<div class="line">${list.map(([k, label, cls]) => `${span("b " + (cls || ""), k)}${span("c-dim", " " + label)}`).join("  ")}</div>`;
+  }
+
+  function renderList() {
+    const list = shown();
+    state.cursor = Math.min(state.cursor, Math.max(0, list.length - 1));
+    const unused = list.filter((i) => i.status === "unused").length;
+    const used = list.length - unused;
+    const rec = list.filter((i) => i.rec).length;
+    const counts = `${span("c-yellow", unused + " Unused")}  ${span("c-green", used + " Used")}${span("c-dim", ` · ${rec} recommended`)}`;
+    const selected = `${state.selection.size} selected`;
+    const pad = " ".repeat(Math.max(2, 66 - (`${unused} Unused  ${used} Used · ${rec} recommended`).length - selected.length));
+    const lines = [...header(), `<div class="line">${counts}${pad}${state.selection.size ? span("b", selected) : span("c-dim", selected)}</div>`];
+    lines.push(`<div class="line c-dim">      ${"name".padEnd(W.name)}  ${"kind".padEnd(W.kind)}  ${"uses".padStart(W.uses - 1)}  ${"last use".padEnd(W.last)}  ${"hooks".padStart(W.hooks)}</div>`);
+    let group = null;
+    list.forEach((i, index) => {
+      if (i.status !== group) {
+        group = i.status;
+        const n = list.filter((x) => x.status === group).length;
+        const cls = group === "unused" ? "c-yellow" : "c-green";
+        if (index > 0) lines.push(`<div class="line"></div>`);
+        lines.push(`<div class="line">  ${span(cls + " b", group === "unused" ? "Unused" : "Used")}${span(cls, "  " + n)}</div>`);
+      }
+      lines.push(rowHtml(i, index === state.cursor, index));
+    });
+    if (list.length === 0) lines.push(`<div class="line c-dim">  Nothing left in this kind.</div>`);
+    const current = list[state.cursor];
+    if (current) {
+      const panel = [
+        `<div class="line"><span class="b">${esc(current.name)}</span>${span("c-dim", "  " + current.kindLabel)}${current.rec ? span("c-yellow", "  ★ recommended for Cleanup") : ""}</div>`,
+        `<div class="line">${span((current.status === "unused" ? "c-yellow" : "c-green") + " b", current.status === "unused" ? "Unused" : "Used")}  ${esc(current.reason)}</div>`,
+        `<div class="line c-dim">${esc(current.facts)}</div>`,
+        removable(current) ? `<div class="line c-dim">Cleanup: ${esc(current.action)}</div>` : "",
+      ];
+      lines.push(`<div class="panel">${panel.join("")}</div>`);
+    }
+    if (state.hint) lines.push(`<div class="line c-yellow">${esc(state.hint)}</div>`);
+    lines.push(keys([["↑↓", "move"], ["←→", "kind"], ["space", "select"], ["r", "recommended"], ["enter", "review"], ["esc", "quit"]]));
+    return lines.join("");
+  }
+
+  function selectedItems() {
+    return items.filter((i) => state.selection.has(i.name) && !state.removed.has(i.name));
+  }
+
+  function renderConfirm() {
+    const sel = selectedItems();
+    const lines = [...header(), `<div class="line"></div>`, `<div class="line b">Remove ${sel.length} Installation${sel.length === 1 ? "" : "s"}?</div>`, `<div class="line"></div>`];
+    sel.forEach((i) => lines.push(`<div class="line">  ${span("c-red", "–")} ${esc(i.name)}${span("c-dim", "  " + i.action)}</div>`));
+    lines.push(`<div class="line"></div>`, `<div class="line b">To undo:</div>`);
+    sel.forEach((i) => lines.push(`<div class="line">  ${span("c-dim", i.undo)}</div>`));
+    lines.push(`<div class="line"></div>`, keys([["enter", "remove", "c-red"], ["esc", "back"], ["q", "quit"]]));
+    return lines.join("");
+  }
+
+  function renderSummary() {
+    const run = state.lastRun;
+    const lines = [...header(), `<div class="line"></div>`, `<div class="line b">Cleanup of ${run.length} Installation${run.length === 1 ? "" : "s"}: ${run.length} removed, 0 failed</div>`, `<div class="line"></div>`];
+    run.forEach((i) => lines.push(`<div class="line">${span("c-green", "✔ removed")}  ${esc(i.name)}</div>`));
+    lines.push(`<div class="line"></div>`, `<div class="line b">To undo:</div>`);
+    run.forEach((i) => lines.push(`<div class="line">  ${span("c-dim", i.undo)}</div>`));
+    lines.push(`<div class="line"></div>`, `<div class="line c-cyan">This is a demo. Nothing on your machine changed.</div>`);
+    lines.push(`<div class="line"></div>`, keys([["↑↓", "scroll"], ["esc", "back"], ["q", "quit"]]));
+    return lines.join("");
+  }
+
+  function render() {
+    term.innerHTML = state.screen === "list" ? renderList() : state.screen === "confirm" ? renderConfirm() : renderSummary();
+  }
+
+  function visibleTabs() {
+    return tabs.map((t, index) => index).filter((index) => index === 3 || items.some(tabs[index].has));
+  }
+
+  function press(key) {
+    state.hint = "";
+    if (state.screen === "list") {
+      const list = shown();
+      const current = list[state.cursor];
+      if (key === "ArrowUp") state.cursor = Math.max(0, state.cursor - 1);
+      else if (key === "ArrowDown") state.cursor = Math.min(list.length - 1, state.cursor + 1);
+      else if (key === "ArrowRight" || key === "ArrowLeft") {
+        const order = visibleTabs();
+        const at = Math.max(0, order.indexOf(state.tab));
+        state.tab = order[(at + (key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+        state.cursor = 0;
+      } else if (key === " ") {
+        if (current && removable(current)) {
+          state.selection.has(current.name) ? state.selection.delete(current.name) : state.selection.add(current.name);
+        }
+      } else if (key === "r") {
+        list.filter((i) => i.rec).forEach((i) => state.selection.add(i.name));
+      } else if (key === "Enter") {
+        if (state.selection.size === 0) state.hint = "Select at least one Installation to review.";
+        else state.screen = "confirm";
+      } else if (key === "Escape" || key === "q") {
+        state.hint = "In your terminal, esc quits declaw.";
+      } else return false;
+    } else if (state.screen === "confirm") {
+      if (key === "Escape") state.screen = "list";
+      else if (key === "Enter" || key === "y") {
+        state.lastRun = selectedItems();
+        state.lastRun.forEach((i) => state.removed.add(i.name));
+        state.selection = new Set();
+        state.screen = "summary";
+      } else return false;
+    } else {
+      if (key === "Escape") {
+        state.screen = "list";
+        state.cursor = 0;
+      } else return false;
+    }
+    render();
+    return true;
+  }
+
+  term.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (press(event.key)) event.preventDefault();
+  });
+  term.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-tab]");
+    const row = event.target.closest("[data-row]");
+    if (tab) {
+      state.tab = Number(tab.dataset.tab);
+      state.cursor = 0;
+      render();
+    } else if (row) {
+      const index = Number(row.dataset.row);
+      if (index === state.cursor) press(" ");
+      else {
+        state.cursor = index;
+        render();
+      }
+    }
+    term.focus({ preventScroll: true });
+  });
+  document.querySelectorAll(".keypad button").forEach((button) => {
+    button.addEventListener("click", () => press(button.dataset.key));
+  });
+
+  document.querySelectorAll("[data-copy]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const source = document.getElementById(button.dataset.copy);
+      const done = () => {
+        button.textContent = "Copied";
+        setTimeout(() => (button.textContent = "Copy"), 1500);
+      };
+      const selectText = () => {
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = "Selected";
+        setTimeout(() => (button.textContent = "Copy"), 2000);
+      };
+      try {
+        navigator.clipboard.writeText(source.textContent).then(done, selectText);
+      } catch (error) {
+        selectText();
+      }
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
