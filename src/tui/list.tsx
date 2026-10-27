@@ -10,9 +10,13 @@ export interface ListRow {
   hooks?: true;
 }
 
+export function idOf(installation: Installation): string {
+  return `${installation.kind} ${installation.name}`;
+}
+
 export function listRowsOf(installations: Installation[], expanded: ReadonlySet<string>): ListRow[] {
   return installations.flatMap((installation, index): ListRow[] => {
-    if (installation.kind !== "plugin" || !expanded.has(installation.name)) return [{ index }];
+    if (installation.kind !== "plugin" || !expanded.has(idOf(installation))) return [{ index }];
     const count = Math.max(1, installation.components.length);
     return [
       { index },
@@ -76,6 +80,7 @@ interface Kind {
 
 export function shortKind(installation: Installation): Kind {
   if (installation.kind === "plugin") return { label: "plugin", color: "magenta" };
+  if (installation.kind === "standalone-mcp-server") return { label: "mcp", color: "blueBright" };
   if (installation.linked?.broken) return { label: "broken link", color: "red" };
   if (installation.linked) return { label: "link", color: "cyan" };
   if (installation.synced) return { label: "synced", color: "gray" };

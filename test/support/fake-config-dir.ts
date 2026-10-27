@@ -230,8 +230,21 @@ export class FakeConfigDir {
     return this;
   }
 
+  async mcpServer(name: string, registration: unknown): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    config.mcpServers = { ...config.mcpServers, [name]: registration };
+    await writeFile(this.configFile, JSON.stringify(config));
+    return this;
+  }
+
+  async rawMcpServers(mcpServers: unknown): Promise<this> {
+    const config = JSON.parse(await readFile(this.configFile, "utf8"));
+    await writeFile(this.configFile, JSON.stringify({ ...config, mcpServers }));
+    return this;
+  }
+
   async corruptConfigFile(): Promise<this> {
-    const config = JSON.stringify({ ...SENSITIVE_CONFIG_FILE_KEYS, skillUsage: {} });
+    const config = JSON.stringify({ ...SENSITIVE_CONFIG_FILE_KEYS, mcpServers: SECRET_MCP_SERVERS, skillUsage: {} });
     await writeFile(this.configFile, config.slice(0, config.length / 2));
     return this;
   }
@@ -304,7 +317,19 @@ export const SENSITIVE_CONFIG_FILE_KEYS = {
   oauthAccount: { accountUuid: "fake-account-uuid", emailAddress: "fake@example.com" },
   userID: "fake-user-id",
   machineID: "fake-machine-id",
-  mcpServers: { secret: { type: "http", url: "https://fake.example.com/mcp?token=fake-token" } },
+};
+
+export const SECRET_MCP_SERVERS = {
+  secret: {
+    type: "http",
+    url: "https://fake.example.com/mcp?token=fake-token",
+    headers: { Authorization: "Bearer fake-header-token" },
+  },
+  "local-secret": {
+    command: "fake-command",
+    args: ["--fake-arg"],
+    env: { FAKE_ENV_TOKEN: "fake-env-token" },
+  },
 };
 
 const DEFAULT_CREATED_AT = "2026-09-01T00:00:00.000Z";

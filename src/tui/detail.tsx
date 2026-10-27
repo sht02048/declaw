@@ -9,6 +9,7 @@ import { STATUS_COLORS } from "./list.js";
 export interface DetailContext {
   periodStart: Date | null;
   configDir: string;
+  backupDir: string;
 }
 
 interface DetailLine {
@@ -18,10 +19,11 @@ interface DetailLine {
 }
 
 export function detailLines(installation: Installation, context: DetailContext): DetailLine[] {
-  const note = installation.kind === "plugin" ? installNote(installation) : "";
+  const note = installation.kind === "standalone-skill" ? "" : installNote(installation);
   const facts = [
     installation.installedAt && `Installed ${formatDate(installation.installedAt)}`,
     installation.kind === "plugin" && formatHooksPerSession(installation.hooks),
+    installation.kind === "standalone-mcp-server" && "no install time recorded",
   ].filter((fact) => typeof fact === "string");
   const lines: (DetailLine | false)[] = [
     {
@@ -60,12 +62,17 @@ export function detailLines(installation: Installation, context: DetailContext):
         wrap: "truncate-end",
         content: "Managed by claude.ai, cannot be removed",
       },
+    installation.kind === "standalone-mcp-server" && {
+      key: "known",
+      wrap: "truncate-end",
+      content: "Only Uses in the covered period are known",
+    },
     isRemovable(installation) && {
       key: "cleanup",
       wrap: "truncate-middle",
       content: (
         <Text dimColor>
-          {`Cleanup: ${actionText(planCleanup([installation], { configDir: context.configDir })[0]!).describe}`}
+          {`Cleanup: ${actionText(planCleanup([installation], context)[0]!).describe}`}
         </Text>
       ),
     },

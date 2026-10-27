@@ -1,6 +1,6 @@
 import { Text } from "ink";
-import type { CleanupOutcome, PlannedAction } from "../engine/index.js";
-import { actionText, UNDO_HEADINGS } from "../cli/actions.js";
+import type { CleanupOutcome } from "../engine/index.js";
+import { actionText, undoGroups } from "../cli/actions.js";
 import { countOf } from "../plural.js";
 import type { ScreenLine } from "./confirm.js";
 
@@ -17,7 +17,7 @@ export function summaryLines(outcomes: CleanupOutcome[]): ScreenLine[] {
   const lines: ScreenLine[] = [];
   for (const outcome of outcomes) {
     lines.push({
-      key: `outcome ${outcome.name}`,
+      key: `outcome ${outcome.action.kind} ${outcome.name}`,
       content:
         outcome.result === "removed" ? (
           <>
@@ -37,18 +37,17 @@ export function summaryLines(outcomes: CleanupOutcome[]): ScreenLine[] {
         .split("\n")
         .filter((line) => line !== "")
         .forEach((line, index) =>
-          lines.push({ key: `message ${outcome.name} ${index}`, content: <Text dimColor>{`    ${line}`}</Text> }),
+          lines.push({ key: `message ${outcome.action.kind} ${outcome.name} ${index}`, content: <Text dimColor>{`    ${line}`}</Text> }),
         );
     }
   }
   const removed = outcomes.flatMap((outcome) => (outcome.result === "removed" ? [outcome.action] : []));
-  for (const kind of Object.keys(UNDO_HEADINGS) as PlannedAction["kind"][]) {
-    const actions = removed.filter((action) => action.kind === kind);
-    if (actions.length === 0) continue;
-    lines.push({ key: `${kind} gap`, content: "" }, { key: kind, content: <Text bold>{UNDO_HEADINGS[kind]}</Text> });
+  for (const { kind, heading, actions, note } of undoGroups(removed)) {
+    lines.push({ key: `${kind} gap`, content: "" }, { key: kind, content: <Text bold>{heading}</Text> });
     for (const action of actions) {
-      lines.push({ key: `undo ${action.name}`, wrap: "truncate-middle", content: `  ${actionText(action).undoInSummary}` });
+      lines.push({ key: `undo ${kind} ${action.name}`, wrap: "truncate-middle", content: `  ${actionText(action).undoInSummary}` });
     }
+    if (note) lines.push({ key: `${kind} note`, content: note });
   }
   return lines;
 }

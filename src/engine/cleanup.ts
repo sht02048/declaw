@@ -1,6 +1,8 @@
-import { lstat, unlink } from "node:fs/promises";
+import { lstat, mkdir, unlink, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Installation } from "./index.js";
-import { planCleanup, type PlannedAction } from "./plan.js";
+import { readMcpServerRegistration } from "./mcp-servers.js";
+import { planCleanup, type PlannedAction, type PlanOptions, type RemoveMcpServer } from "./plan.js";
 
 export type TrashMover = (path: string) => Promise<void>;
 
@@ -11,8 +13,8 @@ export interface ClaudeRunResult {
 
 export type ClaudeRunner = (args: string[]) => Promise<ClaudeRunResult>;
 
-export interface CleanupOptions {
-  configDir: string;
+export interface CleanupOptions extends PlanOptions {
+  configFile: string;
   trash: TrashMover;
   runClaude: ClaudeRunner;
 }
@@ -34,7 +36,7 @@ export async function cleanup(selection: Installation[], options: CleanupOptions
   return outcomes;
 }
 
-async function perform(action: PlannedAction, { trash, runClaude }: CleanupOptions): Promise<void> {
+async function perform(action: PlannedAction, { configFile, trash, runClaude }: CleanupOptions): Promise<void> {
   switch (action.kind) {
     case "remove-link":
       if (!(await lstat(action.path)).isSymbolicLink()) throw new Error(`${action.path} is no longer a link`);
@@ -49,7 +51,20 @@ async function perform(action: PlannedAction, { trash, runClaude }: CleanupOptio
       if (run.exitCode !== 0) throw new Error(run.output);
       return;
     }
+    case "remove-mcp-server": {
+      await backUp(action, configFile);
+      const run = await runClaude(action.removeArgs);
+      if (run.exitCode !== 0) throw new Error(run.output);
+      return;
+    }
   }
+}
+
+async function backUp({ name, backupPath }: RemoveMcpServer, configFile: string): Promise<void> {
+  const registration = await readMcpServerRegistration(configFile, name);
+  if (registration === undefined) throw new Error(`${name} is no longer registered in User Scope`);
+  await mkdir(dirname(backupPath), { recursive: true, mode: 0o700 });
+  await writeFile(backupPath, `${JSON.stringify(registration, null, 2)}\n`, { mode: 0o600, flag: "wx" });
 }
 
 function messageOf(error: unknown): string {

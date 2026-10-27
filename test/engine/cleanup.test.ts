@@ -1,5 +1,5 @@
-import { lstat, readdir, readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cleanup, report, type ClaudeRunner, type Installation, type Report } from "../../src/engine/index.js";
 import { fakeConfigDir, type FakeConfigDir } from "../support/fake-config-dir.js";
@@ -18,7 +18,7 @@ function named(result: Report, ...names: string[]): Installation[] {
 function effectsFor(config: FakeConfigDir, options: { failOn?: string[] } = {}) {
   const trash = fakeTrash(join(config.home, ".Trash"), options);
   const claude = fakeClaude();
-  return { trash, claude, options: { configDir: config.path, trash: trash.move, runClaude: claude.run } };
+  return { trash, claude, options: { ...withClaude(config, claude.run), trash: trash.move } };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -172,7 +172,17 @@ describe("cleanup", () => {
 });
 
 function withClaude(config: FakeConfigDir, runClaude: ClaudeRunner) {
-  return { configDir: config.path, trash: fakeTrash(join(config.home, ".Trash")).move, runClaude };
+  return {
+    configDir: config.path,
+    configFile: config.configFile,
+    backupDir: backupDirOf(config),
+    trash: fakeTrash(join(config.home, ".Trash")).move,
+    runClaude,
+  };
+}
+
+function backupDirOf(config: FakeConfigDir): string {
+  return join(config.home, ".declaw", "backups", "2026-10-26T00-00-00Z");
 }
 
 async function twoPlugins() {
@@ -261,5 +271,111 @@ describe("cleanup of Plugins", () => {
     await cleanup(named(result, "ux-writing", "idle@market"), withClaude(config, claude));
 
     expect(calls).toEqual([["plugin", "uninstall", "idle@market", "--scope", "user"]]);
+  });
+});
+
+async function twoMcpServers() {
+  const config = await fakeConfigDir();
+  await config.mcpServer("context7", {
+    type: "http",
+    url: "https://mcp.context7.com/mcp",
+    headers: { Authorization: "Bearer fake-token" },
+  });
+  await config.mcpServer("pencil", { command: "pencil-mcp", args: ["--stdio"], env: { PENCIL_KEY: "fake-key" } });
+  return { config, result: await report({ ...config.paths, now }) };
+}
+
+describe("cleanup of Standalone MCP Servers", () => {
+  it("backs up the registration to an owner-only file, then removes the server through claude mcp remove", async () => {
+    const { config, result } = await twoMcpServers();
+    const configBefore = await readFile(config.configFile, "utf8");
+    const backupPath = join(backupDirOf(config), "context7.json");
+    const calls: { args: string[]; backup: string }[] = [];
+    const claude: ClaudeRunner = async (args) => {
+      calls.push({ args, backup: await readFile(backupPath, "utf8") });
+      return { exitCode: 0, output: "Removed MCP server context7 from user config\n" };
+    };
+
+    const outcomes = await cleanup(named(result, "context7"), withClaude(config, claude));
+
+    const backup = `{
+  "type": "http",
+  "url": "https://mcp.context7.com/mcp",
+  "headers": {
+    "Authorization": "Bearer fake-token"
+  }
+}
+`;
+    expect(calls).toEqual([{ args: ["mcp", "remove", "context7", "--scope", "user"], backup }]);
+    expect(await readFile(backupPath, "utf8")).toBe(backup);
+    expect((await stat(backupPath)).mode & 0o777).toBe(0o600);
+    expect((await stat(backupDirOf(config))).mode & 0o777).toBe(0o700);
+    expect(outcomes).toEqual([
+      expect.objectContaining({ name: "context7", result: "removed", action: expect.objectContaining({ backupPath }) }),
+    ]);
+    expect(await readFile(config.configFile, "utf8")).toBe(configBefore);
+  });
+
+  it("reports a failed removal with the command's output as-is and goes on with the rest", async () => {
+    const { config, result } = await twoMcpServers();
+    const configBefore = await readFile(config.configFile, "utf8");
+    const failure = "No user-scoped MCP server found with name: context7\n";
+    const { calls, run } = fakeClaude({ context7: { exitCode: 1, output: failure } });
+
+    const outcomes = await cleanup(named(result, "context7", "pencil"), withClaude(config, run));
+
+    expect(calls).toEqual([
+      ["mcp", "remove", "context7", "--scope", "user"],
+      ["mcp", "remove", "pencil", "--scope", "user"],
+    ]);
+    expect(outcomes.map(({ name, result }) => ({ name, result }))).toEqual([
+      { name: "context7", result: "failed" },
+      { name: "pencil", result: "removed" },
+    ]);
+    expect(outcomes[0]).toMatchObject({ message: failure });
+    expect(await readFile(config.configFile, "utf8")).toBe(configBefore);
+  });
+
+  it("leaves a server alone when its registration is gone since the Report, and goes on with the rest", async () => {
+    const { config, result } = await twoMcpServers();
+    await config.rawMcpServers({ pencil: { command: "pencil-mcp" } });
+    const { calls, run } = fakeClaude();
+
+    const outcomes = await cleanup(named(result, "context7", "pencil"), withClaude(config, run));
+
+    expect(calls).toEqual([["mcp", "remove", "pencil", "--scope", "user"]]);
+    expect(outcomes[0]).toMatchObject({
+      name: "context7",
+      result: "failed",
+      message: "context7 is no longer registered in User Scope",
+    });
+    expect(outcomes[1]).toMatchObject({ name: "pencil", result: "removed" });
+    expect(await exists(join(backupDirOf(config), "context7.json"))).toBe(false);
+  });
+
+  it("leaves a server alone when its backup cannot be written", async () => {
+    const { config, result } = await twoMcpServers();
+    await mkdir(dirname(backupDirOf(config)), { recursive: true });
+    await writeFile(backupDirOf(config), "a file where the backup folder should be");
+    const { calls, run } = fakeClaude();
+
+    const outcomes = await cleanup(named(result, "context7"), withClaude(config, run));
+
+    expect(calls).toEqual([]);
+    expect(outcomes).toEqual([expect.objectContaining({ name: "context7", result: "failed" })]);
+  });
+
+  it("never overwrites an existing backup file", async () => {
+    const { config, result } = await twoMcpServers();
+    const backupPath = join(backupDirOf(config), "context7.json");
+    await mkdir(backupDirOf(config), { recursive: true });
+    await writeFile(backupPath, "an earlier backup");
+    const { calls, run } = fakeClaude();
+
+    const outcomes = await cleanup(named(result, "context7"), withClaude(config, run));
+
+    expect(calls).toEqual([]);
+    expect(outcomes).toEqual([expect.objectContaining({ name: "context7", result: "failed" })]);
+    expect(await readFile(backupPath, "utf8")).toBe("an earlier backup");
   });
 });

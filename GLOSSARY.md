@@ -7,7 +7,7 @@ declaw shows how a Claude Code user's installed plugins and skills are actually 
 ### What gets cleaned up
 
 **Installation**:
-The unit the user can remove: a single Plugin or a single Standalone Skill.
+The unit the user can remove: a single Plugin, Standalone Skill, or Standalone MCP Server.
 _Avoid_: item, entry, asset, extension
 
 **Plugin**:
@@ -25,6 +25,10 @@ _Avoid_: user skill, loose skill, local skill
 **Linked Skill**:
 A Standalone Skill whose files belong to somewhere else, such as another tool's skill folder or a personal repository. Removing it removes only the link. A link whose target no longer exists is still a Linked Skill.
 _Avoid_: symlinked skill, external skill
+
+**Standalone MCP Server**:
+An MCP server the user added directly in User Scope, outside any Plugin. Removing it removes only its registration, which declaw keeps a copy of so it can be added back.
+_Avoid_: user MCP, manual MCP, connector
 
 **Synced Skill**:
 A skill managed by the user's claude.ai account. It is shown but never removed, because the account would restore it.

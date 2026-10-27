@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatCleanupSummary } from "../../src/cli/summary.js";
 import { cleanup, report, type ClaudeRunner } from "../../src/engine/index.js";
-import { fakeConfigDir } from "../support/fake-config-dir.js";
+import { fakeConfigDir, type FakeConfigDir } from "../support/fake-config-dir.js";
 import { fakeClaude, fakeTrash } from "../support/fake-effects.js";
 
 const now = new Date("2026-10-26T00:00:00.000Z");
@@ -22,7 +22,7 @@ describe("Cleanup summary", () => {
       (name) => result.installations.find((installation) => installation.name === name)!,
     );
 
-    const outcomes = await cleanup(selection, { configDir: config.path, trash: fakeTrash(config.home).move, runClaude: claude });
+    const outcomes = await cleanup(selection, { ...cleanupPaths(config), trash: fakeTrash(config.home).move, runClaude: claude });
 
     expect(formatCleanupSummary(outcomes)).toBe(
       [
@@ -47,7 +47,7 @@ describe("Cleanup summary", () => {
     const result = await report({ ...config.paths, now });
     const claude: ClaudeRunner = async () => ({ exitCode: 1, output: "✘ nope" });
 
-    const outcomes = await cleanup(result.installations, { configDir: config.path, trash: fakeTrash(config.home).move, runClaude: claude });
+    const outcomes = await cleanup(result.installations, { ...cleanupPaths(config), trash: fakeTrash(config.home).move, runClaude: claude });
 
     expect(formatCleanupSummary(outcomes)).toBe(
       ["Cleanup of 1 Installation: 0 removed, 1 failed", "", "failed   broken@market", "✘ nope", ""].join(
@@ -66,7 +66,7 @@ describe("Cleanup summary", () => {
     const trash = fakeTrash(join(config.home, ".Trash"), { failOn: [stuck] });
 
     const outcomes = await cleanup(result.installations, {
-      configDir: config.path,
+      ...cleanupPaths(config),
       trash: trash.move,
       runClaude: fakeClaude().run,
     });
@@ -90,4 +90,37 @@ describe("Cleanup summary", () => {
       ].join("\n"),
     );
   });
+
+  it("prints how to add back each removed Standalone MCP Server from its backup, and that OAuth needs a new login", async () => {
+    const config = await fakeConfigDir();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    const result = await report({ ...config.paths, now });
+
+    const outcomes = await cleanup(result.installations, {
+      ...cleanupPaths(config),
+      trash: fakeTrash(config.home).move,
+      runClaude: fakeClaude().run,
+    });
+
+    const backupDir = cleanupPaths(config).backupDir;
+    expect(formatCleanupSummary(outcomes)).toBe(
+      [
+        "Cleanup of 2 Installations: 2 removed, 0 failed",
+        "",
+        "removed  context7",
+        "removed  pencil",
+        "",
+        "To add back a removed Standalone MCP Server from its backup:",
+        `  claude mcp add-json context7 "$(cat '${join(backupDir, "context7.json")}')" --scope user`,
+        `  claude mcp add-json pencil "$(cat '${join(backupDir, "pencil.json")}')" --scope user`,
+        "A server that signs in with OAuth needs a new login in /mcp after it is added back.",
+        "",
+      ].join("\n"),
+    );
+  });
 });
+
+function cleanupPaths(config: FakeConfigDir) {
+  return { ...config.paths, backupDir: join(config.home, ".declaw", "backups", "2026-10-26T00-00-00Z") };
+}

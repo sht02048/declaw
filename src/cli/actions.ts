@@ -6,11 +6,30 @@ export interface ActionText {
   undoInSummary: string;
 }
 
-export const UNDO_HEADINGS: Record<PlannedAction["kind"], string> = {
+const UNDO_HEADINGS: Record<PlannedAction["kind"], string> = {
   "uninstall-plugin": "To reinstall a removed Plugin:",
   "remove-link": "To restore a removed Linked Skill:",
   "move-to-trash": "Moved to the system trash, where they can be restored:",
+  "remove-mcp-server": "To add back a removed Standalone MCP Server from its backup:",
 };
+
+const UNDO_NOTES: Partial<Record<PlannedAction["kind"], string>> = {
+  "remove-mcp-server": "A server that signs in with OAuth needs a new login in /mcp after it is added back.",
+};
+
+export interface UndoGroup {
+  kind: PlannedAction["kind"];
+  heading: string;
+  actions: PlannedAction[];
+  note: string | undefined;
+}
+
+export function undoGroups(actions: PlannedAction[]): UndoGroup[] {
+  return (Object.keys(UNDO_HEADINGS) as PlannedAction["kind"][]).flatMap((kind) => {
+    const ofKind = actions.filter((action) => action.kind === kind);
+    return ofKind.length === 0 ? [] : [{ kind, heading: UNDO_HEADINGS[kind], actions: ofKind, note: UNDO_NOTES[kind] }];
+  });
+}
 
 export function actionText(action: PlannedAction): ActionText {
   switch (action.kind) {
@@ -31,6 +50,12 @@ export function actionText(action: PlannedAction): ActionText {
         describe: `Move ${action.path} to the system trash`,
         undo: "restore it from the system trash",
         undoInSummary: action.path,
+      };
+    case "remove-mcp-server":
+      return {
+        describe: `Back up to ${action.backupPath}, then remove with ${action.removeCommand}`,
+        undo: action.addBackCommand,
+        undoInSummary: action.addBackCommand,
       };
   }
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { run } from "../../src/cli/main.js";
 import {
   fakeConfigDir,
+  mcpToolCall,
+  SECRET_MCP_SERVERS,
   SENSITIVE_CONFIG_FILE_KEYS,
   skillToolCall,
   userPrompt,
@@ -53,6 +55,7 @@ describe("declaw stats", () => {
         pluginFiles: { status: "readable" },
         transcripts: { status: "readable" },
         skillUsageCounter: { status: "readable" },
+        mcpServerRegistrations: { status: "readable" },
       },
       installations: [
         {
@@ -167,13 +170,14 @@ describe("declaw stats", () => {
 
     const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
 
-    expect(stdout.split("\n").slice(0, 6)).toEqual([
+    expect(stdout.split("\n").slice(0, 7)).toEqual([
       "Usage Stats from 2026-09-28 to 2026-10-26",
       "Install records: readable",
       "Settings: readable",
       "Plugin files: readable",
       "Transcripts: readable",
       "Skill usage counter: unreadable (config file not found)",
+      "MCP server registrations: unreadable (config file not found)",
     ]);
   });
 
@@ -222,19 +226,64 @@ describe("declaw stats", () => {
     );
   });
 
-  it("never prints the config file's other keys", async () => {
+  it("lists each Standalone MCP Server with its kind, Uses, last Use, and transport", async () => {
+    const config = await exampleConfig();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+    await config.mcpServer("pencil", { command: "pencil-mcp" });
+    await config.transcript({ project: "/work/app", session: "s2" }, [
+      mcpToolCall("mcp__context7__query-docs", "2026-10-12T09:00:00.000Z"),
+    ]);
+
+    const { stdout } = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
+
+    const row = (name: string) => stdout.split("\n").find((line) => line.includes(name));
+    expect(row("pencil")).toMatch(/^\*\s+Unused\s+Standalone MCP Server\s+pencil\s+0\s+never\s+stdio$/);
+    expect(row("context7")).toMatch(/^\s+Used\s+Standalone MCP Server\s+context7\s+1\s+2026-10-12\s+http$/);
+    expect(stdout).toContain("MCP server registrations: readable");
+  });
+
+  it("carries a Standalone MCP Server's name, transport, Uses, last Use, and Usage Status in --json", async () => {
+    const config = await exampleConfig();
+    await config.mcpServer("context7", { type: "http", url: "https://mcp.context7.com/mcp" });
+
+    const { stdout } = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
+
+    expect(JSON.parse(stdout).installations).toContainEqual({
+      kind: "standalone-mcp-server",
+      name: "context7",
+      transport: "http",
+      installedAt: null,
+      usageStatus: "unused",
+      recommended: true,
+      uses: 0,
+      lastUse: null,
+    });
+  });
+
+  it("never prints the config file's other keys or any MCP server setting", async () => {
     const config = await exampleConfig();
     await config.skillUsage("ux-writing", "2026-08-14T12:00:00.000Z");
+    for (const [name, registration] of Object.entries(SECRET_MCP_SERVERS)) await config.mcpServer(name, registration);
 
     const text = await runCli(["stats"], { CLAUDE_CONFIG_DIR: config.path });
     const json = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
     await config.corruptConfigFile();
     const corrupt = await runCli(["stats", "--json"], { CLAUDE_CONFIG_DIR: config.path });
 
+    expect(text.stdout).toMatch(/\ssecret\s.*\shttp$/m);
+    expect(text.stdout).toMatch(/\slocal-secret\s.*\sstdio$/m);
+    expect(JSON.parse(json.stdout).installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "secret", transport: "http" }),
+        expect.objectContaining({ name: "local-secret", transport: "stdio" }),
+      ]),
+    );
     for (const output of [text, json, corrupt].flatMap((run) => [run.stdout, run.stderr])) {
       for (const key of Object.keys(SENSITIVE_CONFIG_FILE_KEYS)) expect(output).not.toContain(key);
       expect(output).not.toContain("fake-user-id");
-      expect(output).not.toContain("fake-token");
+      for (const setting of ["fake-token", "fake.example.com", "fake-header-token", "fake-command", "--fake-arg", "FAKE_ENV_TOKEN", "fake-env-token"]) {
+        expect(output).not.toContain(setting);
+      }
     }
   });
 });
