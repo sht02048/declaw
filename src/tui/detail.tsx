@@ -23,7 +23,6 @@ export function detailLines(installation: Installation, context: DetailContext):
   const facts = [
     installation.installedAt && `Installed ${formatDate(installation.installedAt)}`,
     installation.kind === "plugin" && formatHooksPerSession(installation.hooks),
-    installation.kind === "standalone-mcp-server" && `Connects over ${installation.transport}`,
     installation.kind === "standalone-mcp-server" && "no install time recorded",
   ].filter((fact) => typeof fact === "string");
   const lines: (DetailLine | false)[] = [

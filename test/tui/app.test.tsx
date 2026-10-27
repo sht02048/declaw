@@ -465,7 +465,8 @@ describe("TUI Standalone MCP Servers", () => {
     const panel = unwrapped(plain(lastFrame()!));
     expect(panel).toContain("pencil Standalone MCP Server · stdio ★ recommended for Cleanup");
     expect(panel).toContain("Unused No Use since 2026-09-28");
-    expect(panel).toContain("Connects over stdio · no install time recorded");
+    expect(panel).toContain("no install time recorded");
+    expect(panel.match(/stdio/g)).toHaveLength(1);
     expect(panel).toContain("Only Uses in the covered period are known");
     expect(panel).toContain(
       `Cleanup: Back up to ${join(backupDirOf(config), "pencil.json")}, then remove with claude mcp remove pencil --scope user`,
