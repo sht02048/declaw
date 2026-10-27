@@ -39,7 +39,7 @@ export function actionText(action: PlannedAction): ActionText {
       };
     case "remove-mcp-server":
       return {
-        describe: `Back up to ${action.backupPath}, then remove with claude mcp remove ${action.name} --scope ${action.scope}`,
+        describe: `Back up to ${action.backupPath}, then remove with ${action.removeCommand}`,
         undo: action.addBackCommand,
         undoInSummary: action.addBackCommand,
       };

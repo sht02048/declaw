@@ -27,6 +27,8 @@ export interface RemoveMcpServer {
   name: string;
   scope: "user";
   backupPath: string;
+  removeArgs: string[];
+  removeCommand: string;
   addBackCommand: string;
 }
 
@@ -54,13 +56,15 @@ export function planCleanup(selection: Installation[], { configDir, backupDir }:
     }
     if (installation.kind === "standalone-mcp-server") {
       const backupPath = join(backupDir, uniqueBackupFile(installation.name, backupFiles));
-      const name = /^[A-Za-z0-9._-]+$/.test(installation.name) ? installation.name : shellQuote(installation.name);
+      const removeArgs = ["mcp", "remove", installation.name, "--scope", "user"];
       return {
         kind: "remove-mcp-server",
         name: installation.name,
         scope: "user",
         backupPath,
-        addBackCommand: `claude mcp add-json ${name} "$(cat ${shellQuote(backupPath)})" --scope user`,
+        removeArgs,
+        removeCommand: `claude ${removeArgs.map(shellWord).join(" ")}`,
+        addBackCommand: `claude mcp add-json ${shellWord(installation.name)} "$(cat ${shellQuote(backupPath)})" --scope user`,
       };
     }
     const path = join(configDir, "skills", installation.name);
@@ -84,6 +88,10 @@ function uniqueBackupFile(name: string, taken: Set<string>): string {
   for (let suffix = 2; taken.has(file.toLowerCase()); suffix += 1) file = `${safe}-${suffix}.json`;
   taken.add(file.toLowerCase());
   return file;
+}
+
+function shellWord(value: string): string {
+  return /^[A-Za-z0-9._-]+$/.test(value) ? value : shellQuote(value);
 }
 
 function shellQuote(value: string): string {

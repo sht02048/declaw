@@ -94,6 +94,8 @@ describe("planCleanup", () => {
         name: "context7",
         scope: "user",
         backupPath: `${backupDir}/context7.json`,
+        removeArgs: ["mcp", "remove", "context7", "--scope", "user"],
+        removeCommand: "claude mcp remove context7 --scope user",
         addBackCommand: `claude mcp add-json context7 "$(cat '${backupDir}/context7.json')" --scope user`,
       },
     ]);
@@ -110,6 +112,8 @@ describe("planCleanup", () => {
     expect(plan).toEqual([
       expect.objectContaining({
         backupPath: "/home/me/My Backups/it's/it_s_docs.json",
+        removeArgs: ["mcp", "remove", "it's/docs", "--scope", "user"],
+        removeCommand: "claude mcp remove 'it'\\''s/docs' --scope user",
         addBackCommand: `claude mcp add-json 'it'\\''s/docs' "$(cat '/home/me/My Backups/it'\\''s/it_s_docs.json')" --scope user`,
       }),
     ]);

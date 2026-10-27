@@ -53,7 +53,7 @@ async function perform(action: PlannedAction, { configFile, trash, runClaude }: 
     }
     case "remove-mcp-server": {
       await backUp(action, configFile);
-      const run = await runClaude(["mcp", "remove", action.name, "--scope", action.scope]);
+      const run = await runClaude(action.removeArgs);
       if (run.exitCode !== 0) throw new Error(run.output);
       return;
     }
