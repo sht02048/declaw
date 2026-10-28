@@ -1,5 +1,5 @@
 {
-  "name": "declaw",
+  "name": "@sht02048/declaw",
   "version": "0.1.0",
   "description": "See which Claude Code plugins, skills, and MCP servers you actually use, and remove the rest.",
   "keywords": [
@@ -57,5 +57,8 @@
     "ink": "^8.0.0",
     "react": "^19.3.1",
     "trash": "^10.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

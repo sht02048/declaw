@@ -5,7 +5,7 @@
 <p align="center">See which Claude Code plugins, skills, and MCP servers you actually use.<br>Remove the rest, with a way back for each.</p>
 
 ```sh
-npx declaw
+npx @sht02048/declaw
 ```
 
 <img src="docs/assets/screenshot.png" alt="declaw listing Installations by Usage Status, with five Unused ones selected for Cleanup">
@@ -15,10 +15,10 @@ Requires Node 22 or later on macOS or Linux. Early development.
 ## Commands
 
 ```sh
-npx declaw                # pick what to remove
-npx declaw --dry-run      # the same, but stop before removing
-npx declaw stats          # print Usage Stats as a table
-npx declaw stats --json   # print them as JSON
+npx @sht02048/declaw                # pick what to remove
+npx @sht02048/declaw --dry-run      # the same, but stop before removing
+npx @sht02048/declaw stats          # print Usage Stats as a table
+npx @sht02048/declaw stats --json   # print them as JSON
 ```
 
 ## Every removal has a way back
