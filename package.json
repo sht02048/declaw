@@ -1,12 +1,25 @@
 {
   "name": "declaw",
-  "version": "0.0.0",
-  "description": "See which Claude Code plugins and skills you actually use, and clean up the rest.",
+  "version": "0.1.0",
+  "description": "See which Claude Code plugins, skills, and MCP servers you actually use, and remove the rest.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "plugins",
+    "skills",
+    "mcp",
+    "cli",
+    "cleanup"
+  ],
   "license": "MIT",
   "author": "Minsug Chae",
+  "homepage": "https://declaw.minsug.me",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sht02048/declaw.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sht02048/declaw/issues"
   },
   "type": "module",
   "bin": {
